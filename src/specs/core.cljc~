@@ -1,0 +1,9 @@
+(ns specs.core
+  (:require [clojure.core.async :as async
+             :refer [chan go <! >! put! take!]]
+            ;; TODO: CLJS dependencies.  Can :refer-macros
+            ;; be used for convenience??? Find out!!
+            [cross-map.core :as cmap
+             :refer [cross-map cross-cols cross-rows]]))
+
+

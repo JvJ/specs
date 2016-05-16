@@ -1,0 +1,243 @@
+
+* Specs (Sequential Processes and Entity Component System)
+
+  Specs is a game scripting framework.  It's not a game engine, but a
+  set of abstractions enabling organization of games into
+  entity-component systems.
+
+* Entity-Component System
+  
+  The entity-component-system(ECS) architecture is a means of
+  organizing objects throug "composition over inheritance".
+
+  Rather than defining game entities as classes of objects with
+  pre-defined type hierarchies and fields, game entities are
+  represented as collections of components.
+
+  In Specs, each entity is identified by a UUID, and each component is
+  identified by a component type.  A component type may be a proper
+  class tag/data type, or it may be any keyword or symbol in an
+  object's type metadata.
+
+  Specs terminology for an Entity's UUID is *eid*, and a Component Type
+  is *ctype*.
+
+  Each entity has at most one of any single component type, such that [
+  
+  Systems are functions which execute on entities and update their
+  components as necessary.
+
+* Communicating Sequential Processes
+
+  Communicating sequential processes are asynchronous processes which
+  can wait on input/output over channels.  These enable the writing of
+  asynchronous flows of control without resorting to callbacks.
+
+* SPECS Core Concepts
+
+** The cross-map data structure
+
+   While Entities in the ECS architecture can often be seen as
+   collections of components, that is not entirely true for Specs.  In
+   Specs, the game state is stored as a two-dimensional map, where
+   Entity ID's are the rows and Component Types are the columns.
+
+   Entries into the cross-map have keys of the form [eid, ctype], and
+   their values are components.  However, the cross-map structure
+   enables views of entire rows and columns as single maps, so both
+   the table and the collection view of entities are valid in this
+   case.
+
+   Note on terminology of rows and columns:
+   - e-map :: A single row of the table corresponding to one eid
+   - c-map :: A single column of the table corresponding to one ctype
+   - ec-entry :: A single cell in the table, identified by an
+                 [eid,ctype] pair.
+   - ec-seq :: A list of ec-entries.
+
+** Profiles
+
+   A component profile is a set of component types required for some
+   action.  Typically, this action is the application of a system
+   function.
+
+   Given a cross-map with Entity ID's as rows and Component Types as
+   columns, a component profile is the set of all rows which have all
+   of the specified components.
+
+   There are several functions that construct iteration specifications
+   (profiles) for the cross map.  They are shown in the table below,
+   along with details about their use.
+   
+   | Profile      | Keys for       | Input    | Output          | Cross-iteration        |
+   | Type         | Profile        | Type     | Type            |                        |
+   |--------------+----------------+----------+-----------------+------------------------|
+   | match-ctype* | ctype          | e-map    | e-map or ec-seq | each row with all cols |
+   | match-eid    | eid            | c-map    | c-map or ec-seq | each col with all rows |
+   | for-ctype    | ctype          | c-map    | c-map or ec-seq | each requested col     |
+   | for-eid      | eid            | e-map    | e-map or ec-seq | each requested row     |
+   | for-entry**  | other profiles | ec-entry | ec-seq          | all matching entries   |
+
+   * Match-ctype is the default profile type.  If only a seq is
+     provided as a profile, it is assumed to be for match-ctype.
+     
+   ** For-entry allows the composition of other profile types to create
+      a profile that allows iteration over single entries in the
+      cross-map. Note that this is not normal function composition.
+      That won't work well on these profiles.
+
+** System Functions
+
+   A system function allows the updating of entries in the
+   entity/component map.  A system function is defined in terms of a
+   component profile and a function from Entity -> list of
+   [ID,Type]->Component pairs.  The system is applied to each entity
+   in its profile, and each of the new entries it returnes is
+   associated into the cross-map.  Note that map updates are not made
+   visible until the current system stops executing.
+
+   Note that system functions will have match-ctype profiles by
+   default, and the "defsys" macro only supports match-ctype profiles.
+   
+   See examples.org for extended examples of system functions.
+
+** Controllers
+
+   Controllers are Communicating Sequential Processes that control and
+   react to the game state.  While system functions are executed
+   synchronously durung game update cycles, controllers run completely
+   independent of that cycle.
+
+   Controllers may observe and effect changes in the game state by
+   passing or receiving messages (described below).  Messages are not
+   applied to the game state instantly, but are queued and applied
+   either before or after the system functions on each update cycle.
+
+   Note: The caller may specify if they want a control message to be
+   executed before or after the system functions.  This is known as
+   the "position" of the control message, and may be either ~:head~
+   (before system functions) or ~:tail~ (after system functions).
+
+** Messages
+   
+   Messages are any type of data sent over a channel from a controller
+   to the game state, game state to controller, or between separate
+   controllers.
+
+** Control Messages
+
+   Control messages are a special type of message that can only be
+   sent from controllers to the game state.
+
+   These messages consist of a function very similar to a system
+   function.  In fact, a control message *is* a system function.  The
+   only difference is that control messages are sent over a channel,
+   and theoutput of the function is returned over the channel.
+
+   Keep in mind that channels may be equipped with transducers to
+   modify the input/output.  As is described below in the Data
+   Coercion section, all system functions end up outputting an
+   ec-seq.  These ec-seqs will be the input to any transducers on the
+   receiving channel.
+
+
+
+** Data Coercion 
+   
+   As the profile type chart suggests in the Component Profiles
+   section, a function of any profile type may have an ec-seq as its
+   output.
+
+   In fact, fundamentally, ec-seq is ultimately the return type of all
+   systems.  Therefore, any data output by a system function
+   (including control messages) must be coerced into an ec-seq.  This
+   is done through the use of a set of dynamic global variables
+   referred to collectively as the *coercion context*.
+
+   Here is a description of the coerction context variables:
+
+   - ~*profile*~ :: The component profile that is currently being used
+                    for iteration.  This will match the component
+                    profile of the system function currently being
+                    executed.
+   - ~*eid*~ :: The ID of the entity currently being accessed.  This
+                variable is only set in system functions that take
+                *e-maps* or *ec-entries* as input.  Otherwise, it is
+                nil.
+   - ~*ctype*~ :: The type of the component currently being accessed.
+                  This variable is only set in system functions that
+                  take *c-maps* or *ec-entries* as input.  Otherwise,
+                  it is nil.
+   - ~*state*~ :: The game state on which the current state function
+                  is operating.  Note that the game state is only
+                  updated after a system function has applied to *all*
+                  valid elements.  Therefore, this state will *not*
+                  reflect earlier changes made by the same system
+                  function during the current update cycle.
+   - ~*controller*~ :: If the current system function is a control
+                       message, this is the controller that sent that
+                       control message.  Nil otherwise.
+   - ~*dt*~ :: If this system function was called during an update
+               cycle, this represents the time difference between the
+               start of the last update cycle and the start of the
+               current update cycle.  The value is a double, and
+               represents the number of seconds (usually, this will be
+               much smaller than 1.0).
+   - ~*position*~ :: Either ~:head~ or ~:tail~.  If the current system
+                     function is a control message, indicates if that
+                     system is executing before or after the
+                     synchronous system functions.  Nil otherwise.
+                       
+
+   TODO: Maybe some of the above should be in a different context?
+
+   Here is a chart describing the coercion process for different data
+   types:
+
+   | Data type     | Conversion                                      | Valid for    | Valid for    | Valid for       |
+   |               | logic                                           | e-map input? | c-map input? | ec-entry input? |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | e-map*        | Map destructures to ctype->component            |              |              |                 |
+   |               | entries.  These are changed to                  | OK           |              |                 |
+   |               | [~*eid*~ ctype]->component entries.             |              |              |                 |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | c-map*        | Map destructures to eid->component              |              |              |                 |
+   |               | entries.  These are changed to                  |              | OK           |                 |
+   |               | [eid ~*ctype*~]->component entries.             |              |              |                 |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | ec-seq        | Left as it is.                                  | OK           | OK           | OK              |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | ec-entry      | Added to a one-element ec-seq.                  |              |              | OK              |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | [eid e-map]   | This represents a new row.  Every pair          |              |              |                 |
+   |               | of type ctype->component in the e-map           | OK           |              |                 |
+   |               | will be changed to a pair with the              |              |              |                 |
+   |               | provided eid as the first index.                |              |              |                 |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | [ctype c-map] | Same as above, but eid->component pairs         |              |              |                 |
+   |               | in the map are get the provided ctype           |              | OK           |                 |
+   |               | as the second element of their key.             |              |              |                 |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | [eid other]   | Transforms into ~[ [eid *ctype*] other ]~.      | OK           |              |                 |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | [ctype other] | Transforms into ~[ [*eid* ctype] other ]~.      |              | OK           |                 |
+   |---------------+-------------------------------------------------+--------------+--------------+-----------------|
+   | other         | All other object types are assumed to be        |              |              |                 |
+   |               | components.  They will be turned into entries   | OK           |              | OK              |
+   |               | of ~[ [ *id* (type other) ] other ]~.           |              |              |                 |
+   |               |                                                 |              |              |                 |
+   |               | An object's type is assumed to correspond       |              |              |                 |
+   |               | to its component-type.  The clojure function    |              |              |                 |
+   |               | "type" will first check for :type metadata,     |              |              |                 |
+   |               | and if not present, will return the object's    |              |              |                 |
+   |               | class.  For this reason, it is suggested that   |              |              |                 |
+   |               | user-defined component types or imeta instances |              |              |                 |
+   |               | be used for component values.                   |              |              |                 |
+
+   *Note: e-map and c-map are not just any map type.  They must
+   have ~:e-map->true~ or ~:c-map->true~ in their metadata to be
+   considered as such.  Update operations on input maps or use
+   of the c-map or e-map functions will ensure that this metadata is
+   present.
+
+** 

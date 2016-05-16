@@ -1,0 +1,816 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>design</title>
+<!-- 2016-05-14 Sat 16:50 -->
+<meta  http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta  name="generator" content="Org-mode" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { color: green; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  pre.src-sh:before    { content: 'sh'; }
+  pre.src-bash:before  { content: 'sh'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-R:before     { content: 'R'; }
+  pre.src-perl:before  { content: 'Perl'; }
+  pre.src-java:before  { content: 'Java'; }
+  pre.src-sql:before   { content: 'SQL'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.right  { text-align: center;  }
+  th.left   { text-align: center;   }
+  th.center { text-align: center; }
+  td.right  { text-align: right;  }
+  td.left   { text-align: left;   }
+  td.center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara:nth-child(2) { display: inline; }
+  .footpara { display: block; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">design</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#sec-1">1. Specs (Sequential Processes and Entity Component System)</a></li>
+<li><a href="#sec-2">2. Entity-Component System</a></li>
+<li><a href="#sec-3">3. Communicating Sequential Processes</a></li>
+<li><a href="#sec-4">4. SPECS Core Concepts</a>
+<ul>
+<li><a href="#sec-4-1">4.1. The cross-map data structure</a></li>
+<li><a href="#sec-4-2">4.2. Profiles</a></li>
+<li><a href="#sec-4-3">4.3. System Functions</a></li>
+<li><a href="#sec-4-4">4.4. Controllers</a></li>
+<li><a href="#sec-4-5">4.5. Messages</a></li>
+<li><a href="#sec-4-6">4.6. Control Messages</a></li>
+<li><a href="#sec-4-7">4.7. Data Coercion</a></li>
+<li><a href="#sec-4-8">4.8. </a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> Specs (Sequential Processes and Entity Component System)</h2>
+<div class="outline-text-2" id="text-1">
+<p>
+Specs is a game scripting framework.  It's not a game engine, but a
+set of abstractions enabling organization of games into
+entity-component systems.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> Entity-Component System</h2>
+<div class="outline-text-2" id="text-2">
+<p>
+The entity-component-system(ECS) architecture is a means of
+organizing objects throug "composition over inheritance".
+</p>
+
+<p>
+Rather than defining game entities as classes of objects with
+pre-defined type hierarchies and fields, game entities are
+represented as collections of components.
+</p>
+
+<p>
+In Specs, each entity is identified by a UUID, and each component is
+identified by a component type.  A component type may be a proper
+class tag/data type, or it may be any keyword or symbol in an
+object's type metadata.
+</p>
+
+<p>
+Specs terminology for an Entity's UUID is <b>eid</b>, and a Component Type
+is <b>ctype</b>.
+</p>
+
+<p>
+Each entity has at most one of any single component type, such that [
+</p>
+
+<p>
+Systems are functions which execute on entities and update their
+components as necessary.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> Communicating Sequential Processes</h2>
+<div class="outline-text-2" id="text-3">
+<p>
+Communicating sequential processes are asynchronous processes which
+can wait on input/output over channels.  These enable the writing of
+asynchronous flows of control without resorting to callbacks.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> SPECS Core Concepts</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-sec-4-1" class="outline-3">
+<h3 id="sec-4-1"><span class="section-number-3">4.1</span> The cross-map data structure</h3>
+<div class="outline-text-3" id="text-4-1">
+<p>
+While Entities in the ECS architecture can often be seen as
+collections of components, that is not entirely true for Specs.  In
+Specs, the game state is stored as a two-dimensional map, where
+Entity ID's are the rows and Component Types are the columns.
+</p>
+
+<p>
+Entries into the cross-map have keys of the form [eid, ctype], and
+their values are components.  However, the cross-map structure
+enables views of entire rows and columns as single maps, so both
+the table and the collection view of entities are valid in this
+case.
+</p>
+
+<p>
+Note on terminology of rows and columns:
+</p>
+<dl class="org-dl">
+<dt> e-map </dt><dd>A single row of the table corresponding to one eid
+</dd>
+<dt> c-map </dt><dd>A single column of the table corresponding to one ctype
+</dd>
+<dt> ec-entry </dt><dd>A single cell in the table, identified by an
+[eid,ctype] pair.
+</dd>
+<dt> ec-seq </dt><dd>A list of ec-entries.
+</dd>
+</dl>
+</div>
+</div>
+
+<div id="outline-container-sec-4-2" class="outline-3">
+<h3 id="sec-4-2"><span class="section-number-3">4.2</span> Profiles</h3>
+<div class="outline-text-3" id="text-4-2">
+<p>
+A component profile is a set of component types required for some
+action.  Typically, this action is the application of a system
+function.
+</p>
+
+<p>
+Given a cross-map with Entity ID's as rows and Component Types as
+columns, a component profile is the set of all rows which have all
+of the specified components.
+</p>
+
+<p>
+There are several functions that construct iteration specifications
+(profiles) for the cross map.  They are shown in the table below,
+along with details about their use.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="left" />
+
+<col  class="left" />
+
+<col  class="left" />
+
+<col  class="left" />
+
+<col  class="left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="left">Profile</th>
+<th scope="col" class="left">Keys for</th>
+<th scope="col" class="left">Input</th>
+<th scope="col" class="left">Output</th>
+<th scope="col" class="left">Cross-iteration</th>
+</tr>
+
+<tr>
+<th scope="col" class="left">Type</th>
+<th scope="col" class="left">Profile</th>
+<th scope="col" class="left">Type</th>
+<th scope="col" class="left">Type</th>
+<th scope="col" class="left">&#xa0;</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="left">match-ctype*</td>
+<td class="left">ctype</td>
+<td class="left">e-map</td>
+<td class="left">e-map or ec-seq</td>
+<td class="left">each row with all cols</td>
+</tr>
+
+<tr>
+<td class="left">match-eid</td>
+<td class="left">eid</td>
+<td class="left">c-map</td>
+<td class="left">c-map or ec-seq</td>
+<td class="left">each col with all rows</td>
+</tr>
+
+<tr>
+<td class="left">for-ctype</td>
+<td class="left">ctype</td>
+<td class="left">c-map</td>
+<td class="left">c-map or ec-seq</td>
+<td class="left">each requested col</td>
+</tr>
+
+<tr>
+<td class="left">for-eid</td>
+<td class="left">eid</td>
+<td class="left">e-map</td>
+<td class="left">e-map or ec-seq</td>
+<td class="left">each requested row</td>
+</tr>
+
+<tr>
+<td class="left">for-entry**</td>
+<td class="left">other profiles</td>
+<td class="left">ec-entry</td>
+<td class="left">ec-seq</td>
+<td class="left">all matching entries</td>
+</tr>
+</tbody>
+</table>
+
+<ul class="org-ul">
+<li>Match-ctype is the default profile type.  If only a seq is
+provided as a profile, it is assumed to be for match-ctype.
+</li>
+</ul>
+
+<p>
+** For-entry allows the composition of other profile types to create
+   a profile that allows iteration over single entries in the
+   cross-map. Note that this is not normal function composition.
+   That won't work well on these profiles.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-3" class="outline-3">
+<h3 id="sec-4-3"><span class="section-number-3">4.3</span> System Functions</h3>
+<div class="outline-text-3" id="text-4-3">
+<p>
+A system function allows the updating of entries in the
+entity/component map.  A system function is defined in terms of a
+component profile and a function from Entity -&gt; list of
+[ID,Type]-&gt;Component pairs.  The system is applied to each entity
+in its profile, and each of the new entries it returnes is
+associated into the cross-map.  Note that map updates are not made
+visible until the current system stops executing.
+</p>
+
+<p>
+Note that system functions will have match-ctype profiles by
+default, and the "defsys" macro only supports match-ctype profiles.
+</p>
+
+<p>
+See examples.org for extended examples of system functions.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-4" class="outline-3">
+<h3 id="sec-4-4"><span class="section-number-3">4.4</span> Controllers</h3>
+<div class="outline-text-3" id="text-4-4">
+<p>
+Controllers are Communicating Sequential Processes that control and
+react to the game state.  While system functions are executed
+synchronously durung game update cycles, controllers run completely
+independent of that cycle.
+</p>
+
+<p>
+Controllers may observe and effect changes in the game state by
+passing or receiving messages (described below).  Messages are not
+applied to the game state instantly, but are queued and applied
+either before or after the system functions on each update cycle.
+</p>
+
+<p>
+Note: The caller may specify if they want a control message to be
+executed before or after the system functions.  This is known as
+the "position" of the control message, and may be either <code>:head</code>
+(before system functions) or <code>:tail</code> (after system functions).
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-5" class="outline-3">
+<h3 id="sec-4-5"><span class="section-number-3">4.5</span> Messages</h3>
+<div class="outline-text-3" id="text-4-5">
+<p>
+Messages are any type of data sent over a channel from a controller
+to the game state, game state to controller, or between separate
+controllers.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-6" class="outline-3">
+<h3 id="sec-4-6"><span class="section-number-3">4.6</span> Control Messages</h3>
+<div class="outline-text-3" id="text-4-6">
+<p>
+Control messages are a special type of message that can only be
+sent from controllers to the game state.
+</p>
+
+<p>
+These messages consist of a function very similar to a system
+function.  In fact, a control message <b>is</b> a system function.  The
+only difference is that control messages are sent over a channel,
+and theoutput of the function is returned over the channel.
+</p>
+
+<p>
+Keep in mind that channels may be equipped with transducers to
+modify the input/output.  As is described below in the Data
+Coercion section, all system functions end up outputting an
+ec-seq.  These ec-seqs will be the input to any transducers on the
+receiving channel.
+</p>
+</div>
+</div>
+
+
+
+<div id="outline-container-sec-4-7" class="outline-3">
+<h3 id="sec-4-7"><span class="section-number-3">4.7</span> Data Coercion</h3>
+<div class="outline-text-3" id="text-4-7">
+<p>
+As the profile type chart suggests in the Component Profiles
+section, a function of any profile type may have an ec-seq as its
+output.
+</p>
+
+<p>
+In fact, fundamentally, ec-seq is ultimately the return type of all
+systems.  Therefore, any data output by a system function
+(including control messages) must be coerced into an ec-seq.  This
+is done through the use of a set of dynamic global variables
+referred to collectively as the <b>coercion context</b>.
+</p>
+
+<p>
+Here is a description of the coerction context variables:
+</p>
+
+<dl class="org-dl">
+<dt> <code>*profile*</code> </dt><dd>The component profile that is currently being used
+for iteration.  This will match the component
+profile of the system function currently being
+executed.
+</dd>
+<dt> <code>*eid*</code> </dt><dd>The ID of the entity currently being accessed.  This
+variable is only set in system functions that take
+<b>e-maps</b> or <b>ec-entries</b> as input.  Otherwise, it is
+nil.
+</dd>
+<dt> <code>*ctype*</code> </dt><dd>The type of the component currently being accessed.
+This variable is only set in system functions that
+take <b>c-maps</b> or <b>ec-entries</b> as input.  Otherwise,
+it is nil.
+</dd>
+<dt> <code>*state*</code> </dt><dd>The game state on which the current state function
+is operating.  Note that the game state is only
+updated after a system function has applied to <b>all</b>
+valid elements.  Therefore, this state will <b>not</b>
+reflect earlier changes made by the same system
+function during the current update cycle.
+</dd>
+<dt> <code>*controller*</code> </dt><dd>If the current system function is a control
+message, this is the controller that sent that
+control message.  Nil otherwise.
+</dd>
+<dt> <code>*dt*</code> </dt><dd>If this system function was called during an update
+cycle, this represents the time difference between the
+start of the last update cycle and the start of the
+current update cycle.  The value is a double, and
+represents the number of seconds (usually, this will be
+much smaller than 1.0).
+</dd>
+<dt> <code>*position*</code> </dt><dd>Either <code>:head</code> or <code>:tail</code>.  If the current system
+function is a control message, indicates if that
+system is executing before or after the
+synchronous system functions.  Nil otherwise.
+</dd>
+</dl>
+
+
+<p>
+TODO: Maybe some of the above should be in a different context?
+</p>
+
+<p>
+Here is a chart describing the coercion process for different data
+types:
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="left" />
+
+<col  class="left" />
+
+<col  class="left" />
+
+<col  class="left" />
+
+<col  class="left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="left">Data type</th>
+<th scope="col" class="left">Conversion</th>
+<th scope="col" class="left">Valid for</th>
+<th scope="col" class="left">Valid for</th>
+<th scope="col" class="left">Valid for</th>
+</tr>
+
+<tr>
+<th scope="col" class="left">&#xa0;</th>
+<th scope="col" class="left">logic</th>
+<th scope="col" class="left">e-map input?</th>
+<th scope="col" class="left">c-map input?</th>
+<th scope="col" class="left">ec-entry input?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="left">e-map*</td>
+<td class="left">Map destructures to ctype-&gt;component</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">entries.  These are changed to</td>
+<td class="left">OK</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">[~*eid*~ ctype]-&gt;component entries.</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">c-map*</td>
+<td class="left">Map destructures to eid-&gt;component</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">entries.  These are changed to</td>
+<td class="left">&#xa0;</td>
+<td class="left">OK</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">[eid ~*ctype*~]-&gt;component entries.</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">ec-seq</td>
+<td class="left">Left as it is.</td>
+<td class="left">OK</td>
+<td class="left">OK</td>
+<td class="left">OK</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">ec-entry</td>
+<td class="left">Added to a one-element ec-seq.</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">OK</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">[eid e-map]</td>
+<td class="left">This represents a new row.  Every pair</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">of type ctype-&gt;component in the e-map</td>
+<td class="left">OK</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">will be changed to a pair with the</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">provided eid as the first index.</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">[ctype c-map]</td>
+<td class="left">Same as above, but eid-&gt;component pairs</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">in the map are get the provided ctype</td>
+<td class="left">&#xa0;</td>
+<td class="left">OK</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">as the second element of their key.</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">[eid other]</td>
+<td class="left">Transforms into <code>[ [eid *ctype*] other ]</code>.</td>
+<td class="left">OK</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">[ctype other]</td>
+<td class="left">Transforms into <code>[ [*eid* ctype] other ]</code>.</td>
+<td class="left">&#xa0;</td>
+<td class="left">OK</td>
+<td class="left">&#xa0;</td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td class="left">other</td>
+<td class="left">All other object types are assumed to be</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">components.  They will be turned into entries</td>
+<td class="left">OK</td>
+<td class="left">&#xa0;</td>
+<td class="left">OK</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">of <code>[ [ *id* (type other) ] other ]</code>.</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">An object's type is assumed to correspond</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">to its component-type.  The clojure function</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">"type" will first check for :type metadata,</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">and if not present, will return the object's</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">class.  For this reason, it is suggested that</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">user-defined component types or imeta instances</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="left">&#xa0;</td>
+<td class="left">be used for component values.</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+<td class="left">&#xa0;</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+*Note: e-map and c-map are not just any map type.  They must
+have <code>:e-map-&gt;true</code> or <code>:c-map-&gt;true</code> in their metadata to be
+considered as such.  Update operations on input maps or use
+of the c-map or e-map functions will ensure that this metadata is
+present.
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-4-8" class="outline-3">
+<h3 id="sec-4-8"><span class="section-number-3">4.8</span> </h3>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="date">Created: 2016-05-14 Sat 16:50</p>
+<p class="creator"><a href="http://www.gnu.org/software/emacs/">Emacs</a> 25.0.50.1 (<a href="http://orgmode.org">Org</a> mode 8.2.10)</p>
+<p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
