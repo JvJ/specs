@@ -134,6 +134,7 @@
   to iterate over the specified entries."
   [{:keys [row-keys col-keys any-row any-col every-row every-col]
     :as profile}]
+  (println "Here's the profile: " profile)
   (assert (not (and any-row every-row))
           "Invalid profile: Cannot specify both :any-row and :every-row.")
   (assert (not (and any-col every-col))
@@ -226,33 +227,48 @@
                  (do (assert *eid* "Cannot coerce from single component in this context.")
                      (ec-seq (ece [*eid* t] o))))))))
 
+(defn- bind
+  "Bindings for match-type profiles.  Returns [profile-form, bind-map]."
+  [prof v]
+  (let [_ (assert (and (vector? v) (even? (count v)))
+                  "bind-ctype requires an even number of forms.") 
+        pairs (partition 2 v)
+        bind-map (into {} (map vec) pairs)
+        kys (map second pairs)
+        prof-form `(~prof ~@kys)]
+    [prof-form, bind-map]))
+
+(defn- bind-ctype
+  [v]
+  (bind `match-ctype v))
+
+(defn- bind-eid
+  [v]
+  (bind `match-eid v))
+
 ;;; System functions
 (defmacro sysfn
   "Used like fn, but requires a profile before
   parameter declaration.  Multiple arities not supported."
-  {:arglists '([name? (profile? [bindings*]) [params*] exprs*])}
+  {:arglists '([name? profile-or-bindings [params*] exprs*])}
   [& args]
-  (let [[fn-name [p-and-b & rest]] (if (symbol? (first args))
-                                     [`(~(first args)) (rest args)]
-                                     [() args])
+  (let [[fn-name [p-or-b params & rest]] (if (symbol? (first args))
+                                           [`(~(first args)) (rest args)]
+                                           [() args])
 
-        [profile bindings] (if (even? (count p-and-b))
-                             [nil p-and-b]
-                             [(first p-and-b) (rest p-and-b)])
-
-        binding-vec  (into [] (<| (partition-all 2) cat) bindings)
-        binding-keys (into [] (<| (partition-all 2) second) bindings)
-        
-        profile (if profile
-                  profile
-                  `(match-ctype ~@binding-keys))
-        
-        ev-prof (eval profile)]
+        [prof-form bind-map] (cond (vector? p-or-b) (bind-ctype p-or-b)
+                                   (seq? p-or-b) (let [[p b & r] p-or-b
+                                                       _ (assert (and (nil? r)
+                                                                      (vector? b)
+                                                                      ('#{bind-ctype bind-eid}))
+                                                                 (str "Invalid binding form: " p-or-b))]
+                                                   (cond 
+                                                     (= 'bind-ctype p) (bind-ctype b)
+                                                     (= 'bind-eid p)   (bind-eid b))))]
     
     `(with-meta
-       (fn ~@fn-name ~@rest)
-       {:profile ~profile
-        :profile-fn (realize-profile ~profile)})))
-
-;; (defmacro defsys)
-
+       (fn ~@fn-name [o#]
+         (let [~params [o#] ~bind-map o#]
+           ~@rest))
+       {:profile ~prof-form
+        :profile-fn (realize-profile ~prof-form)})))
