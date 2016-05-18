@@ -8,7 +8,7 @@
                      cols rows]]
             [cross-map.util :as u
              :refer [new-uuid <| |> $ Err kvp pair?]]
-            #?(:clj [clojure.tools.macro :as ctm
+            #?(:clj [clojure.tools.macro :as cmt
                      :refer [name-with-attributes]])))
 
 ;;;; Constants, for utility
@@ -61,7 +61,7 @@
   "Match with each entity that has all specified
   ctypes."
   [& ctypes]
-  {:col-keys ctypes
+  {:col-keys (or ctypes ())
    :every-col :every-col})
 
 ;; LEFTOFF: Come up with a decent macro binding system
@@ -71,7 +71,7 @@
   "Match with each component column that has all
   specified entity ID's."
   [& eids]
-  {:row-keys eids
+  {:row-keys (or eids ())
    :every-row :every-row})
 
 (defn for-ctype
@@ -128,13 +128,32 @@
   [[[id ctype :as kv] cpt]]
   (->EnvSettings id ctype kv))
 
+(defn- match-ctype-preprocess
+  [[id e]]
+  (->e-map e))
+
+(defn- match-eid-preprocess
+  [[ctype ccol]]
+  (->c-map ccol))
+
+(defn- for-ctype-preprocess
+  [[ctype ccol]]
+  (->c-map ccol))
+
+(defn- for-eid-preprocess
+  [[eid e]]
+  (->e-map e))
+
+(defn- for-entry-preprocess
+  [[[id ctype :as kv] cpt]]
+  (ec-entry id ctype))
+
 (defn realize-profile
   "Takes the profile specified and produces a
   function that can be called on a cross-map
   to iterate over the specified entries."
   [{:keys [row-keys col-keys any-row any-col every-row every-col]
     :as profile}]
-  (println "Here's the profile: " profile)
   (assert (not (and any-row every-row))
           "Invalid profile: Cannot specify both :any-row and :every-row.")
   (assert (not (and any-col every-col))
@@ -143,13 +162,18 @@
           "Invalid profile: Either row-keys or col-keys must be specified.")
   (let [opts (filter identity [any-row every-row any-col every-col])]
     (cond (and row-keys col-keys)
-          (with-meta #(apply cross % row-keys col-keys opts) {:env-fn for-entry-env})
+          (with-meta #(apply cross % row-keys col-keys opts) {:env-fn for-entry-env
+                                                              :preprocess-fn for-entry-preprocess})
           row-keys (if every-row
-                     (with-meta #(apply cross-rows % row-keys opts) {:env-fn match-eid-env})
-                     (with-meta (fn [cm] (map #(find (rows cm) %) row-keys)) {:env-fn for-eid-env}))
+                     (with-meta #(apply cross-rows % row-keys opts) {:env-fn match-eid-env
+                                                                     :preprocess-fn match-eid-preprocess})
+                     (with-meta (fn [cm] (map #(find (rows cm) %) row-keys)) {:env-fn for-eid-env
+                                                                              :preprocess-fn for-eid-preprocess}))
           col-keys (if every-col
-                     (with-meta #(apply cross-cols % col-keys opts) {:env-fn match-ctype-env})
-                     (with-meta (fn [cm] (map #(find (cols cm) %) col-keys)) {:env-fn for-ctype-env})))))
+                     (with-meta #(apply cross-cols % col-keys opts) {:env-fn match-ctype-env
+                                                                     :preprocess-fn match-ctype-preprocess})
+                     (with-meta (fn [cm] (map #(find (cols cm) %) col-keys)) {:env-fn for-ctype-env
+                                                                              :preprocess-fn for-ctype-preprocess})))))
 
 ;;; ECS data types
 
@@ -160,12 +184,27 @@
     m
     (assoc (meta m) :type ::e-map)))
 
+(defn ->e-map
+  "Convert a structure to an entity map."
+  [m]
+  (with-meta
+    m
+    (assoc (meta m) :type ::e-map)))
+
 (defn e-map?
   [m]
   (= ::e-map (type m)))
 
 (defn c-map
+  "Create a component map."
   [& {:as m}]
+  (with-meta
+    m
+    (assoc (meta m) :type ::c-map)))
+
+(defn ->c-map
+  "Convert a structure to a component map."
+  [m]
   (with-meta
     m
     (assoc (meta m) :type ::c-map)))
@@ -250,21 +289,22 @@
 (defmacro sysfn
   "Used like fn, but requires a profile before
   parameter declaration.  Multiple arities not supported."
-  {:arglists '([name? profile-or-bindings [params*] exprs*])}
+  {:arglists '([name? [params*] profile-or-bindings exprs*])}
   [& args]
-  (let [[fn-name [p-or-b params & rest]] (if (symbol? (first args))
+  (let [[fn-name [params p-or-b & rest]] (if (symbol? (first args))
                                            [`(~(first args)) (rest args)]
                                            [() args])
-
-        [prof-form bind-map] (cond (vector? p-or-b) (bind-ctype p-or-b)
-                                   (seq? p-or-b) (let [[p b & r] p-or-b
-                                                       _ (assert (and (nil? r)
-                                                                      (vector? b)
-                                                                      ('#{bind-ctype bind-eid}))
-                                                                 (str "Invalid binding form: " p-or-b))]
-                                                   (cond 
-                                                     (= 'bind-ctype p) (bind-ctype b)
-                                                     (= 'bind-eid p)   (bind-eid b))))]
+        p-or-b (if (vector? p-or-b)
+                 `(~'bind-ctype ~p-or-b)
+                 p-or-b)
+        [prof-form bind-map] (let [[p b & r] p-or-b
+                                   _ (assert (and (nil? r)
+                                                  (vector? b)
+                                                  ('#{bind-ctype bind-eid} p))
+                                             (str "Invalid binding form: " p-or-b))]
+                               (cond 
+                                 (= 'bind-ctype p) (bind-ctype b)
+                                 (= 'bind-eid p)   (bind-eid b)))]
     
     `(with-meta
        (fn ~@fn-name [o#]
@@ -272,3 +312,34 @@
            ~@rest))
        {:profile ~prof-form
         :profile-fn (realize-profile ~prof-form)})))
+
+(defmacro defsys
+  "Define a system function.  Syntax similar to defn, but
+  profiles/bindings are necessary, just like sysfn.
+  Multiple arities not supported."
+  {:arglists '([name doc-string? attr-map? [params*] body])}
+  [nme & args]
+  (let [[nme [params p-or-b & args]] (name-with-attributes nme args)
+        p-or-b (if (vector? p-or-b)
+                 `(~'bind-ctype ~p-or-b)
+                 p-or-b)
+        nme (with-meta nme (assoc (meta nme)
+                                  :arglists `'(~params ~p-or-b)))]
+    `(def ~nme (sysfn ~params ~p-or-b ~@args))))
+
+
+(defn profile
+  "Retrieve the profile data of a sysfn."
+  [f]
+  (-> f meta :profile))
+
+(defn profile-fn
+  "Retrieve the cross-map iteration function
+  of a sysfn's profile."
+  [f]
+  (-> f meta :profile-fn))
+
+(defn preprocess-fn
+  "Retrieve the preprocessing function from a sysfn."
+  [f]
+  (-> f profile-fn meta :preprocess-fn))

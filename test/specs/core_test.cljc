@@ -2,6 +2,8 @@
   (:require [cross-map.core :as cmap
              :refer [cross-map cross cross-cols cross-rows
                      cols rows]]
+            [cross-map.util :as u
+             :refer [<|]]
             [clojure.test :refer :all]
             [specs.core :refer :all]))
 
@@ -78,3 +80,66 @@
     (is (thrown? AssertionError
                  (realize-profile (for-entry (apply match-eid row-keys)
                                              (apply for-eid col-keys)))))))
+
+
+;;; For testing defsys
+(defsys test-defsys
+  [row]
+  [c :c
+   d :d
+   e :e]
+  [row c d e])
+
+(defsys test-row-defsys
+  [col]
+  (bind-eid [three 3
+             four 4
+             five 5
+             six 6])
+  [col three four five six])
+
+(deftest sysfn-test
+  ;; Tests whether or not sysfns operate as appropriate on
+  ;; normal cross-map iteration
+  (let [removals (list [2,:c],[2,:d],[2,:e],[4,:f],[6,:b],[7,:c],
+                       [7,:f],[3,:j],[4,:j],[5,:j],[6,:j])
+        test-cmap (apply dissoc test-cmap removals)
+        row-keys [3,4,5,6]
+        col-keys [:c,:d,:e]
+
+        ;; This sysfn should select all rows with c, d, and e components,
+        ;; and bind the variables appropriately
+        test-sysfn (sysfn [row]
+                          [c :c
+                           d :d
+                           e :e]
+                          [row c d e])
+
+        prof (profile test-sysfn)
+        prof-fn (profile-fn test-sysfn)
+
+        test-sysfn-results (map (<| test-sysfn val) (prof-fn test-cmap))
+        test-defsys-results (map (<| test-defsys val) (prof-fn test-cmap))
+        compare-results (->> (cross-cols test-cmap [:c :d :e])
+                             (map val)
+                             (map (fn [row] [row (:c row) (:d row) (:e row)])))
+
+        test-row-sysfn (sysfn [col]
+                              (bind-eid [three 3
+                                         four 4
+                                         five 5
+                                         six 6])
+                              [col three four five six])
+
+        prof-row (profile test-row-sysfn)
+        prof-fn-row (profile-fn test-row-sysfn)
+        
+        test-row-results (map (<| test-row-sysfn val) (prof-fn-row test-cmap))
+        test-row-def-results (map (<| test-row-defsys val) (prof-fn-row test-cmap))
+
+        compare-row-results (->> (cross-rows test-cmap [3 4 5 6])
+                                 (map val)
+                                 (map (fn [col] [col (col 3) (col 4) (col 5) (col 6)])))]
+    (is (= test-sysfn-results test-defsys-results compare-results))
+    (is (= test-row-results test-row-def-results compare-row-results))))
+
