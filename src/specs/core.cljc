@@ -13,7 +13,7 @@
 
 ;;;; Constants, for utility
 (def ^:const head ::head)
-(def ^:const body ::body)<
+(def ^:const body ::body)
 (def ^:const tail ::tail)
 
 ;;;; Global Context
@@ -55,8 +55,66 @@
   if any."
   nil)
 
-;;; ECS data types
+;; Component data types
+(defprotocol IComponent
+  "Extend this protocol to implement any component type.
+  It's easier to use the defcomponent macro to generate
+  component types."
+  (getCType [this] "Get the component-type of this object."))
 
+(defn ctype
+  "Get the type of the object passed-in.
+  First tries to return the :type metadata.  Then, if
+  the object satisfies IComponent, .getType is called.
+  Finally, the object's type is returned if all else fails."
+  [o]
+  (or (some-> o meta :type)
+      (and (satisfies? IComponent o) (.getCType o))
+      (type o)))
+
+;; Helper functions for defcomponent
+(defn- impl-class-sym
+  "Convert a symbol defining a component type to the
+  name of its implementation class.  This is done
+  by adding 2 underscores before the symbol name.
+  Namespace is kept the same."
+  [s]
+  (symbol (namespace s) (str "__" (name s))))
+
+(defn- ctype-keyword
+  "Convert a ctype symbol to a namespace-qualified
+  keyword.  If no NS is provided for the symbol,
+  the current namespace is used."
+  [s]
+  (keyword (or (namespace s)
+               (name (.-name *ns*)))
+           (name s)))
+
+(defn- factory-fn-sym
+  "Create a factory function symbol for defcomponent."
+  [s]
+  (symbol (namespace s) (str "->" (name s))))
+
+(defmacro defcomponent
+  "Define a component type.  Use is similar to defrecord, but an optional
+  docstring and/or attr-map may be provided."
+  {:arglists '([name docstring? attr-map? [& fields] & opts+specs])}
+  [nme & args]
+  (let [[nme [fields & args]] (name-with-attributes nme args)
+        _ (assert (vector? fields) "defcomponent requires vector of fields.")
+        nme-kw (ctype-keyword nme)
+        impl-class (impl-class-sym nme)
+        fac-fn (factory-fn-sym nme)]
+    `(do (defrecord ~impl-class
+             ~fields
+           IComponent
+           (~'getCType [~'this] ~nme-kw)
+           ~@args)
+         (def ~nme ~nme-kw)
+         (defn ~fac-fn ~fields
+           (new ~impl-class ~@fields)))))
+
+;;; ECS data types
 (defn e-map
   "Create an entity map."
   [id & {:as m}]
@@ -64,7 +122,7 @@
 
 (defn e-map?
   [m]
-  (isa? (type m) ::e-map))
+  (isa? (ctype m) ::e-map))
 
 (defn get-eid
   "Retrieves the eid from the metadata of an e-map."
@@ -80,12 +138,12 @@
 
 (defn c-map
   "Create a component map."
-  [ctype & {:as m}]
-  (vary-meta m assoc :type ::c-map :ctype ctype))
+  [ctp & {:as m}]
+  (vary-meta m assoc :type ::c-map :ctype ctp))
 
 (defn c-map?
   [m]
-  (isa? (type m) ::c-map))
+  (isa? (ctype m) ::c-map))
 
 (defn get-ctype
   "Retrieves the ctype from the metadata of a c-map."
@@ -94,10 +152,10 @@
 
 (defn ->c-map
   "Convert a structure to a component map."
-  [ctype m]
-  (if (and (c-map? m) (= (get-ctype m) ctype))
+  [ctp m]
+  (if (and (c-map? m) (= (get-ctype m) ctp))
     m
-    (vary-meta m assoc :type ::c-map :ctype ctype)))
+    (vary-meta m assoc :type ::c-map :ctype ctp)))
 
 
 (defn ec-entry
@@ -110,7 +168,7 @@
 
 (defn ec-entry?
   [kv]
-  (= ::ec-entry (type kv)))
+  (= ::ec-entry (ctype kv)))
 
 (defn ec-seq
   "Enter all the return values in here."
@@ -120,13 +178,13 @@
 
 (defn ec-seq?
   [s]
-  (= ::ec-seq (type s)))
+  (= ::ec-seq (ctype s)))
 
 (defn entity-with-id
   "Create a new entity with the specified ID."
   [id & components]
   (->e-map id
-           (into {} (map #(kvp (type %) %))
+           (into {} (map #(kvp (ctype %) %))
                  components)))
 
 (defn new-entity
@@ -187,12 +245,12 @@
   (->EnvSettings id nil e))
 
 (defn- match-eid-env
-  [[ctype ccol]]
-  (->EnvSettings nil ctype ccol))
+  [[ctp ccol]]
+  (->EnvSettings nil ctp ccol))
 
 (defn- for-ctype-env
-  [[ctype ccol]]
-  (->EnvSettings nil ctype ccol))
+  [[ctp ccol]]
+  (->EnvSettings nil ctp ccol))
 
 (defn- for-eid-env
   [[eid e]]
@@ -201,7 +259,7 @@
 (defn- for-entry-env
   "A fucntion to return global environment settings based on
   the profile and input."
-  [[[id ctype :as kv] cpt]]
+  [[[id ctype :as kv] _]]
   (->EnvSettings id ctype kv))
 
 (defn- match-ctype-preprocess
@@ -209,11 +267,11 @@
   (->e-map eid e))
 
 (defn- match-eid-preprocess
-  [[ctype ccol]]
+  [[_ ccol]]
   (->c-map ccol))
 
 (defn- for-ctype-preprocess
-  [[ctype ccol]]
+  [[ctp ccol]]
   (->c-map ctype ccol))
 
 (defn- for-eid-preprocess
@@ -221,8 +279,8 @@
   (->e-map eid e))
 
 (defn- for-entry-preprocess
-  [[[id ctype :as kv] cpt]]
-  (ec-entry id ctype))
+  [[[id ctp :as kv] _]]
+  (ec-entry id ctp))
 
 (defn realize-profile
   "Takes the profile specified and produces a
@@ -265,7 +323,7 @@
   "Coerce the provided args to a single ec-seq containing
   either ec-entries or state-ops"
   [o]
-  (let [t (type o)]
+  (let [t (ctype o)]
     (case t
       ::e-map    (do (assert *eid* "Cannot coerce from e-map in this context.")
                      (->> o
