@@ -13,7 +13,7 @@
 
 ;;;; Constants, for utility
 (def ^:const head ::head)
-(def ^:const body ::body)
+(def ^:const body ::body)<
 (def ^:const tail ::tail)
 
 ;;;; Global Context
@@ -55,6 +55,85 @@
   if any."
   nil)
 
+;;; ECS data types
+
+(defn e-map
+  "Create an entity map."
+  [id & {:as m}]
+  (vary-meta m assoc :type ::e-map :eid id))
+
+(defn e-map?
+  [m]
+  (isa? (type m) ::e-map))
+
+(defn get-eid
+  "Retrieves the eid from the metadata of an e-map."
+  [m]
+  (-> m meta :eid))
+
+(defn ->e-map
+  "Convert a structure to an entity map."
+  [id m]
+  (if (and (e-map? m) (= (get-eid m) id))
+    m
+    (vary-meta m assoc :type ::e-map :eid id)))
+
+(defn c-map
+  "Create a component map."
+  [ctype & {:as m}]
+  (vary-meta m assoc :type ::c-map :ctype ctype))
+
+(defn c-map?
+  [m]
+  (isa? (type m) ::c-map))
+
+(defn get-ctype
+  "Retrieves the ctype from the metadata of a c-map."
+  [m]
+  (-> m meta :ctype))
+
+(defn ->c-map
+  "Convert a structure to a component map."
+  [ctype m]
+  (if (and (c-map? m) (= (get-ctype m) ctype))
+    m
+    (vary-meta m assoc :type ::c-map :ctype ctype)))
+
+
+(defn ec-entry
+  [k v]
+  (with-meta
+    [k v]
+    {:type ::ec-entry}))
+
+(def ece ec-entry)
+
+(defn ec-entry?
+  [kv]
+  (= ::ec-entry (type kv)))
+
+(defn ec-seq
+  "Enter all the return values in here."
+  [& args]
+  (with-meta args
+    {:type ::ec-seq}))
+
+(defn ec-seq?
+  [s]
+  (= ::ec-seq (type s)))
+
+(defn entity-with-id
+  "Create a new entity with the specified ID."
+  [id & components]
+  (->e-map id
+           (into {} (map #(kvp (type %) %))
+                 components)))
+
+(defn new-entity
+  "Utility function for easy creation of a new entity."
+  [& {:as components}]
+  (apply entity-with-id (new-uuid) components))
+
 ;;;; Cross-map iteration profiles
 
 (defn match-ctype
@@ -63,9 +142,6 @@
   [& ctypes]
   {:col-keys (or ctypes ())
    :every-col :every-col})
-
-;; LEFTOFF: Come up with a decent macro binding system
-;; (defmacro bind-ctype)
 
 (defn match-eid
   "Match with each component column that has all
@@ -129,8 +205,8 @@
   (->EnvSettings id ctype kv))
 
 (defn- match-ctype-preprocess
-  [[id e]]
-  (->e-map e))
+  [[eid e]]
+  (->e-map eid e))
 
 (defn- match-eid-preprocess
   [[ctype ccol]]
@@ -138,11 +214,11 @@
 
 (defn- for-ctype-preprocess
   [[ctype ccol]]
-  (->c-map ccol))
+  (->c-map ctype ccol))
 
 (defn- for-eid-preprocess
   [[eid e]]
-  (->e-map e))
+  (->e-map eid e))
 
 (defn- for-entry-preprocess
   [[[id ctype :as kv] cpt]]
@@ -175,65 +251,7 @@
                      (with-meta (fn [cm] (map #(find (cols cm) %) col-keys)) {:env-fn for-ctype-env
                                                                               :preprocess-fn for-ctype-preprocess})))))
 
-;;; ECS data types
 
-(defn e-map
-  "Create an entity map."
-  [& {:as m}]
-  (with-meta
-    m
-    (assoc (meta m) :type ::e-map)))
-
-(defn ->e-map
-  "Convert a structure to an entity map."
-  [m]
-  (with-meta
-    m
-    (assoc (meta m) :type ::e-map)))
-
-(defn e-map?
-  [m]
-  (= ::e-map (type m)))
-
-(defn c-map
-  "Create a component map."
-  [& {:as m}]
-  (with-meta
-    m
-    (assoc (meta m) :type ::c-map)))
-
-(defn ->c-map
-  "Convert a structure to a component map."
-  [m]
-  (with-meta
-    m
-    (assoc (meta m) :type ::c-map)))
-
-(defn c-map?
-  [m]
-  (= ::c-map (type m)))
-
-(defn ec-entry
-  [k v]
-  (with-meta
-    [k v]
-    {:type ::ec-entry}))
-
-(def ece ec-entry)
-
-(defn ec-entry?
-  [kv]
-  (= ::ec-entry (type kv)))
-
-(defn ec-seq
-  "Enter all the return values in here."
-  [& args]
-  (with-meta args
-    {:type ::ec-seq}))
-
-(defn ec-seq?
-  [s]
-  (= ::ec-seq (type s)))
 
 ;;;; Special operations that can be performed
 (defn state-op
@@ -246,25 +264,24 @@
 (defn coerce-to-ec-seq
   "Coerce the provided args to a single ec-seq containing
   either ec-entries or state-ops"
-  [& args]
-  (mapcat (fn [o]
-            (let [t (type o)]
-              (case t
-                 ::e-map    (do (assert *eid* "Cannot coerce from e-map in this context.")
-                                  (->> o
-                                       (map (fn [[k v]] (ece [*eid* k] v)))
-                                       (apply ec-seq)))
-                 ::c-map    (do (assert *ctype* "Cannot coerce from c-map in this context.")
-                                  (->> o
-                                       (map (fn [[k v]] (ece [k *ctype*] v)))
-                                       (apply ec-seq)))
-                 ::ec-entry (ec-seq o)
-                 ::ec-seq   o
-                 ::state-op o
-                
-                ;; Default case treats it as component, with type as a key
-                 (do (assert *eid* "Cannot coerce from single component in this context.")
-                     (ec-seq (ece [*eid* t] o))))))))
+  [o]
+  (let [t (type o)]
+    (case t
+      ::e-map    (do (assert *eid* "Cannot coerce from e-map in this context.")
+                     (->> o
+                          (map (fn [[k v]] (ece [*eid* k] v)))
+                          (apply ec-seq)))
+      ::c-map    (do (assert *ctype* "Cannot coerce from c-map in this context.")
+                     (->> o
+                          (map (fn [[k v]] (ece [k *ctype*] v)))
+                          (apply ec-seq)))
+      ::ec-entry (ec-seq o)
+      ::ec-seq   o
+      ::state-op o
+      
+      ;; Default case treats it as component, with type as a key
+      (do (assert *eid* "Cannot coerce from single component in this context.")
+          (ec-seq (ece [*eid* t] o))))))
 
 (defn- bind
   "Bindings for match-type profiles.  Returns [profile-form, bind-map]."
@@ -343,3 +360,48 @@
   "Retrieve the preprocessing function from a sysfn."
   [f]
   (-> f profile-fn meta :preprocess-fn))
+
+(defn env-fn
+  "Retrieve the environment creation function from a sysfn."
+  [f]
+  (-> f profile-fn meta :env-fn))
+
+;;;; Game state iteration
+
+(defn game-state
+  "Create a game-state from a collection of entity maps."
+  [e-maps]
+  (into (cross-map)
+        (mapcat (fn [em]
+                  (assert (e-map? em) "Inputs to game-state must be e-maps.")
+                  (let [eid (get-eid em)]
+                    (map #(kvp [eid (key %)] (val %)) em))))
+        e-maps))
+
+(defn run-systems
+  "Execute the systems provided.  The systems should be in
+  an ordered collection (it should satisfy sequential?). "
+  [state systems]
+  {:pre [(sequential? systems)]}
+  (reduce (fn [acc sys]
+            (let [enviro-fn (env-fn sys)
+                  pre-fn (preprocess-fn sys)
+                  prof-fn (profile-fn sys)
+                  prof (profile sys)]
+              (binding [*state* acc
+                        *position* body]
+                (into acc
+                      (mapcat (fn [kv]
+                                (let [{:keys [eid ctype res] :as env}
+                                      (enviro-fn kv)]
+                                  (binding [*eid* eid
+                                            *ctype* ctype]
+                                    (-> (pre-fn kv)
+                                        (sys)
+                                        (coerce-to-ec-seq))))))
+                      (prof-fn acc)))))
+          state
+          systems))
+
+(defn update-loop
+  [])

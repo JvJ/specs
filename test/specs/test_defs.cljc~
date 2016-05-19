@@ -1,0 +1,12 @@
+(ns specs.test-defs
+  (:require  #?(:clj [clojure.test :as t]
+                :cljs [cljs.test :as t :include-macros true])))
+
+(defrecord Position
+    [x y])
+
+(defrecord Velocity
+    [dx dy])
+
+(defrecord Acceleration
+    [ddx ddy])

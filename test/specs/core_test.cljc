@@ -5,7 +5,9 @@
             [cross-map.util :as u
              :refer [<|]]
             [clojure.test :refer :all]
-            [specs.core :refer :all]))
+            [specs.core :refer :all]
+            [specs.test-defs :refer :all])
+  )
 
 ;;;; A test-map that we can use for cross-referencing!
 (def alphabet (map char (range (int \a) (inc (int \z)))))
@@ -142,4 +144,71 @@
                                  (map (fn [col] [col (col 3) (col 4) (col 5) (col 6)])))]
     (is (= test-sysfn-results test-defsys-results compare-results))
     (is (= test-row-results test-row-def-results compare-row-results))))
+
+
+;; (defsys update-p
+;;   [e]
+;;   [{:keys [x y]} Position
+;;    {:keys [dx dy]} Velocity]
+;;   (assert (not= *eid* "Still")
+;;           "The Still entity should not be updated by update-v.")
+;;   (->Position (+ x dx) (+ y dy)))
+
+;; (defsys update-v
+;;   [e]
+;;   [{:keys [dx dy]} Velocity
+;;    {:keys [ddx ddy]} Acceleration]
+;;   (assert (not= *eid* "Still")
+;;           "The Still entity should not be updated by update-v.")
+;;   (assert (not= *eid* "Slow")
+;;           "The Mover entity should not be updated by update-v.")
+;;   (->Velocity (+ dx ddx) (+ dy ddy)))
+
+;; (deftest run-systems-tst
+;;   ;; Testing whether or not run-systems works
+;;   (let [;; This one has no functions executed on it.
+;;         still-ent (entity-with-id "Still"
+;;                                   (->Position 0 0))
+;;         ;; This one should only have update-p executed on it
+;;         slow-ent (entity-with-id "Slow"
+;;                                   (->Position 0 0)
+;;                                   (->Velocity 1 1))
+;;         ;; This one has both update-v and update-p executed on it
+;;         fast-ent (entity-with-id "Fast"
+;;                                  (->Position 0 0)
+;;                                  (->Velocity 1 1)
+;;                                  (->Acceleration 1 1))
+
+;;         ;; Update velocity first so that acceleration
+;;         ;; influences position
+;;         system-order [update-v update-p]
+
+;;         ;; Initial game state
+;;         state (game-state (list still-ent
+;;                                 slow-ent
+;;                                 fast-ent))
+
+;;         ;; Subsequent game state
+;;         new-state (run-systems state system-order)
+
+;;         ;; Destructure the new state's rows to get entities
+;;         {new-still "Still"
+;;          new-slow "Slow"
+;;          new-fast "Fast"} (rows new-state)
+
+;;         ;;typeses (map (<| type key) new-still)
+;;         ]
+;;     (is (= new-still {}))
+;;     (is (isa? (first (keys new-still)) Position))
+;;     (is (= (first (keys new-still)) Position))
+    
+;;     (is (= (new-still Position) (->Position 0 0)))
+    
+;;     (is (= (new-slow Position) (->Position 1 1)))
+;;     (is (= (new-slow Velocity) (->Velocity 1 1)))
+
+;;     (is (= (new-fast Position) (->Position 2 2)))
+;;     (is (= (new-fast Velocity) (->Velocity 2 2)))
+;;     (is (= (new-fast Acceleration) (->Acceleration 1 1)))))
+
 
