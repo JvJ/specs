@@ -477,15 +477,12 @@
   ([m c] (beacon m c identity true))
   ([m c x] (beacon m c identity x))
   ([m c f x]
-   (go-loop [x' x
+   (go-loop [signal x
              t (timeout m)]
      (alt!
        c ([v] (if-not (= v :stop)
-                (recur x' t)))
-       t ([v] (let [x'' (f x')]
-                (>! c x'')
-                (when-not (reduced? x'')
-                  (recur x'' (timeout m)))))))))
+                (recur signal t)))
+       t ([v] ( (f x)))))))
 
 (defn update-loop
   "Async process that updates the system functions based on a
