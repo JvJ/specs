@@ -1,7 +1,9 @@
 (ns specs.core
-  (:require [clojure.core.async :as async
+  (:require [#?(:clj clojure.core.async :cljs cljs.core.async)
+             :as async
+             :include-macros true
              :refer [chan go <! >! put! take! go-loop
-                     timeout alts! alt!]]
+                     timeout alts! alt! close!]]
             ;; TODO: CLJS dependencies.  Can :refer-macros
             ;; be used for convenience??? Find out!!
             [cross-map.core :as cmap
@@ -520,7 +522,7 @@
                t (timeout-at ft)]
        (if (nil? t)         
          ;; The timeout-at channel couldn't open
-         ;; This represents a skipped frame
+         ;; This indicates a skipped frame
          (let [first-time? (nil? last-s)
                f-result (if first-time? nil (fs last-s))
                _ (assert (or first-time?
@@ -533,7 +535,7 @@
          ;; Successful timeout-at channel
          (alt!
            c ([v] (if-not (= v :stop)
-                    (recur last-x last-s fts (timeout-at ft))
+                    (recur last-x last-s fts t)
                     nil)) ; Terminate the loop by returning nil
            t ([v] (let [first-time? (nil? last-x)
                         f-result (if first-time? nil (fx last-x))
