@@ -1,0 +1,64 @@
+(ns specs.channels
+  "Implementing custom channels and channel-related functions.
+  Beacon channels are defined here."
+  (:require [#?(:clj clojure.core.async :cljs cljs.core.async)
+             :as async
+             :include-macros true
+             :refer [chan go <! >! put! take! go-loop
+                     timeout alts! alt! close!]]
+            [#?(:clj clojure.core.async.impl.protocols
+                :cljs clojure.core.async.impl.protocols)
+             :as p]
+            
+            [#?(:clj clj-time.core :cljs cljs-time.core)
+             :as tm]))
+
+
+(defn timeout-at
+  "Returns a timeout channel that times out at the specified
+  time.  t should be a DateTime object, the same type that
+  (clj-time.core/now) or (cljs-time.core/now) would return."
+  [t]
+  (let [n (tm/now)]
+    (if (tm/before? n t)
+      (timeout (tm/in-millis (tm/interval n t)))
+      (timeout 0))))
+
+(defn beacon
+  "Create a channel that emits a value every m milliseconds.
+  
+  More specifically, it emits values at pre-calculated time points at exact
+  multiples of m milliseconds from the time of creation.
+  
+  For a given time point, if the value is read from the channel before the
+  next time point, this counts as a success.  If it is read after the next
+  time point, it is a failure.  True means success, false means failure.
+
+  Closing the channel stops the beacon process."
+  ([m]
+   (let [start-time (tm/now)
+         c (chan)
+         frame-seq (map #(tm/plus start-time
+                                  (tm/millis (* (inc %) m)))
+                        (range))]
+     (go-loop [[frm1 & [frm2 :as rest-frms] :as frms] frame-seq]
+       (alt!
+         c ([v] (if-not (nil? v) (recur frms)))
+         (timeout-at frm1) ([_]
+                            (put! c true
+                                  (fn [b]
+                                    (println [(+ (tm/second frm1)
+                                                 (/ (tm/milli frm1)
+                                                    1000.0))
+                                              (+ (tm/second (tm/now))
+                                                 (/ (tm/milli (tm/now))
+                                                    1000.0))
+                                              (+ (tm/second frm2)
+                                                 (/ (tm/milli frm2)
+                                                    1000.0))])
+                                    (if (tm/before? (tm/now) frm2)
+                                      b
+                                      (not b))))
+                            (recur rest-frms))))
+     ;; Return the channel
+     c)))

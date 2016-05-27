@@ -9,5 +9,8 @@
                  [com.jvj/cross-map "0.2.0-SNAPSHOT"]
                  [clj-time "0.11.0"]
                  [com.andrewmcveigh/cljs-time "0.4.0"]]
-
-  :profiles {:dev {:dependencies [[criterium "0.4.4"]]}})
+  
+  :source-paths ["src"]
+  
+  :profiles {:dev {:dependencies [[criterium "0.4.4"]]
+                   :source-paths ["src" "dev"]}})
