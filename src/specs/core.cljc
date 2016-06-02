@@ -62,6 +62,11 @@
   if any."
   nil)
 
+(def ^{:fields [] :keyword ::Component}
+  Component
+  "Supertype of all componnets."
+  ::Component)
+
 ;; Component data types
 (defprotocol IComponent
   "Extend this protocol to implement any component type.
@@ -97,27 +102,75 @@
                (name (.-name *ns*)))
            (name s)))
 
+(defn- ctype-sym
+  "Convert ctype namespace-qualified keyword
+  to a symbol.  NS must be provided!"
+  [s]
+  {:pre [(namespace s)]}
+  (symbol (namespace s)
+          (name s)))
+
 (defn- factory-fn-sym
   "Create a factory function symbol for defcomponent."
   [s]
   (symbol (namespace s) (str "->" (name s))))
 
+#_(defn- process-inheritance
+  "Helper for the macro function.  Returns a 2-tuple.
+  The first element is the field list for the new record
+  definition.  The second is a list of derive statements
+  inheriting the new type from previous types."
+  [nme ctypes]
+  (let [nme-kw (ctype-keyword nme)
+        ctype-kws (map eval ctypes)
+        _ (assert (every? #(isa? % Component) ctype-kws)
+                  "Every ctype specified must be a subtype of Component.")
+        ctype-syms (map #(if (keyword? %) (ctype-sym %) (eval %)))
+        _ (assert (every? symbol? ctype-syms)
+                  "Ctypes specified must be symbols, or must resolve to keywords.")
+        ctype-vars (map resolve ctype-syms)
+        _ (assert (every? boolean ctype-vars)
+                  (str "All ctypes specified must resolve to vars."))
+        ctype-fields (loop [[f & fs :as fss] (mapcat #(-> % meta :fields)
+                                             ctype-vars)
+                            marked #{}
+                            acc []]
+                       (cond (empty? fss) acc
+                             (marked f) (recur fs marked acc)
+                             :else (recur fs (conj marked f) (conj acc f))))
+        derivations (map (fn [kw] `(derive ~nme-kw ~kw)) ctype-kws)]
+    [ctype-fields derivations]))
+
 (defmacro defcomponent
   "Define a component type.  Use is similar to defrecord, but an optional
-  docstring and/or attr-map may be provided."
+  docstring and/or attr-map may be provided.
+
+  Instead of just a name, a list of the format (name :< & ctypes) may be
+  provided.  If this is the case, the new component inherits from another
+  component type.  It also implicitly inherits all that type's fields.
+
+  Specifying a field of the same name as that of a supertype will cause
+  an exception."
   {:arglists '([name docstring? attr-map? [& fields] & opts+specs])}
   [nme & args]
-  (let [[nme [fields & args]] (name-with-attributes nme args)
+  (let [[nme ctypes] (if (seq? nme)
+                       (do (assert (and (>= (count nme) 3) (= :< (second nme)))
+                                   "When inheriting component types, the format is (name :< & ctypes).")
+                           [(first nme) (drop 2 nme)])
+                       [nme ()])
+        [nme [fields & args]] (name-with-attributes nme args)
         _ (assert (vector? fields) "defcomponent requires vector of fields.")
         nme-kw (ctype-keyword nme)
         impl-class (impl-class-sym nme)
         fac-fn (factory-fn-sym nme)]
+    
     `(do (defrecord ~impl-class
              ~fields
            IComponent
            (~'getCType [~'this] ~nme-kw)
            ~@args)
-         (def ~nme ~nme-kw)
+         (derive ~nme-kw Component)
+         (def ^{:fields ~fields :keyword ~nme-kw} ~nme ~nme-kw)
          (defn ~fac-fn ~fields
            (new ~impl-class ~@fields)))))
 
@@ -431,8 +484,32 @@
   [f]
   (-> f profile-fn meta :env-fn))
 
-;;;; Game state iteration
+;;;; Game state
 
+;;;; Hooks are a special kind of component.  
+
+(defcomponent Hook
+  "Capture a particular coponent or substructure of a component,
+and send a message on the channel whenever it changes."
+  [chan comp-type comp-keys previous])
+
+(defsys monitor-change
+  "Using a hook, check whether or not "
+  [ent]
+  [{:keys [chan keys previous] :as h} Hook]
+  ;; Just check if the value of "previous" has changed
+  ;; If it has, update it and send it over the channel.
+  (let [current (get-in ent keys)
+        ret (if (= current previous)
+              ent
+              (assoc-in ent keys current))]
+    (put! chan )))
+
+(defrecord GameState
+    [c-map
+     reg-chans])
+
+;; TODO: This function should be re-organized into a game-state record
 (defn game-state
   "Create a game-state from a collection of entity maps."
   [e-maps]
