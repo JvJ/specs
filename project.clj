@@ -12,5 +12,7 @@
   
   :source-paths ["src"]
   
-  :profiles {:dev {:dependencies [[criterium "0.4.4"]]
+  :profiles {:dev {:dependencies [[criterium "0.4.4"]
+                                  [quil "2.4.0"]
+                                  [net.mikera/core.matrix "0.52.1"]]
                    :source-paths ["src" "dev"]}})

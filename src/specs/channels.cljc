@@ -29,6 +29,8 @@
   [t]
   (+ (tm/second t) (/ (tm/milli t) 1000.0)))
 
+;; TODO: Make adjustable beacon!
+
 (defn beacon
   "Create a channel that emits a value every m milliseconds.
   
@@ -56,15 +58,12 @@
                (if-not (nil? v)
                  (recur frms)))
            (timeout-at frm1) ([_]
-                              #_(println "Before: " (mapv secf [frm1 (tm/now) frm2]))
                               (>! c1 frm2)
-                              #_(println "After : " (mapv secf [frm1 (tm/now) frm2]))
                               (recur rest-frms)))))
      ;; The filter
      (go-loop []
        (alt!
          c1 ([v]
-             
              (>! c2 (tm/before? (tm/now) v))
              (recur))
          c2 ([v]

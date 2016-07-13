@@ -126,15 +126,15 @@
    to the game state, game state to controller, or between separate
    controllers.
 
-** Control Messages
+** System Messages
 
-   Control messages are a special type of message that can only be
+   System messages are a special type of message that can only be
    sent from controllers to the game state.
 
    These messages consist of a function very similar to a system
-   function.  In fact, a control message *is* a system function.  The
-   only difference is that control messages are sent over a channel,
-   and theoutput of the function is returned over the channel.
+   function.  In fact, a system message *is* a system function.  The
+   only difference is that system messages are sent over a channel,
+   and the output of the function is returned over the channel.
 
    Keep in mind that channels may be equipped with transducers to
    modify the input/output.  As is described below in the Data
@@ -142,7 +142,16 @@
    ec-seq.  These ec-seqs will be the input to any transducers on the
    receiving channel.
 
+** The Control State
+   n
+   The control state consists of the following parts:
+   
+   - Cross-map of entity-component pairs
+   - Control channel
+   - 
 
+** Control Messages
+   
 
 ** Data Coercion 
    
@@ -260,3 +269,4 @@
    present.
 
 ** 
+

@@ -11,6 +11,10 @@
                      cols rows]]
             [cross-map.util :as cmu
              :refer [new-uuid <| |> $ Err kvp pair?]]
+            [specs.channels :as s-ch
+             :refer [beacon]]
+            [specs.control :as s-ctrl
+             :refer [controller control-state]]
 
             [#?(:clj clj-time.core :cljs cljs-time.core)
              :as tm]
@@ -114,32 +118,6 @@
   "Create a factory function symbol for defcomponent."
   [s]
   (symbol (namespace s) (str "->" (name s))))
-
-#_(defn- process-inheritance
-  "Helper for the macro function.  Returns a 2-tuple.
-  The first element is the field list for the new record
-  definition.  The second is a list of derive statements
-  inheriting the new type from previous types."
-  [nme ctypes]
-  (let [nme-kw (ctype-keyword nme)
-        ctype-kws (map eval ctypes)
-        _ (assert (every? #(isa? % Component) ctype-kws)
-                  "Every ctype specified must be a subtype of Component.")
-        ctype-syms (map #(if (keyword? %) (ctype-sym %) (eval %)))
-        _ (assert (every? symbol? ctype-syms)
-                  "Ctypes specified must be symbols, or must resolve to keywords.")
-        ctype-vars (map resolve ctype-syms)
-        _ (assert (every? boolean ctype-vars)
-                  (str "All ctypes specified must resolve to vars."))
-        ctype-fields (loop [[f & fs :as fss] (mapcat #(-> % meta :fields)
-                                             ctype-vars)
-                            marked #{}
-                            acc []]
-                       (cond (empty? fss) acc
-                             (marked f) (recur fs marked acc)
-                             :else (recur fs (conj marked f) (conj acc f))))
-        derivations (map (fn [kw] `(derive ~nme-kw ~kw)) ctype-kws)]
-    [ctype-fields derivations]))
 
 (defmacro defcomponent
   "Define a component type.  Use is similar to defrecord, but an optional
@@ -486,30 +464,6 @@
 
 ;;;; Game state
 
-;;;; Hooks are a special kind of component.  
-
-(defcomponent Hook
-  "Capture a particular coponent or substructure of a component,
-and send a message on the channel whenever it changes."
-  [chan comp-type comp-keys previous])
-
-(defsys monitor-change
-  "Using a hook, check whether or not "
-  [ent]
-  [{:keys [chan keys previous] :as h} Hook]
-  ;; Just check if the value of "previous" has changed
-  ;; If it has, update it and send it over the channel.
-  (let [current (get-in ent keys)
-        ret (if (= current previous)
-              ent
-              (assoc-in ent keys current))]
-    (put! chan )))
-
-(defrecord GameState
-    [c-map
-     reg-chans])
-
-;; TODO: This function should be re-organized into a game-state record
 (defn game-state
   "Create a game-state from a collection of entity maps."
   [e-maps]
@@ -547,7 +501,70 @@ and send a message on the channel whenever it changes."
 
 (defn update-loop
   "Async process that updates the system functions based on a
-  framerate."
-  [framerate]
-  ;; LEFTOFF: Do the timers!!!
-  (go-loop []))
+  frame-time, specified in milliseconds.
+
+  It requires an initial game state, and returns a control state.
+
+  Passing functions of c-state to c-state over the command channel
+  causes the command channel to be updated.  If a function returns
+  a nil value for a c-state, the loop will exit.
+
+  A skip handler may be provided, which is a function from c-state
+  to c-state."
+  [frame-time game-state skip-handler]
+  (let [c-state (control-state :c-map game-state
+                               :frame-time frame-time)]
+    (go-loop [ft frame-time
+              {:keys [c-map
+                      control
+                      beacon
+                      systems
+                      controllers]
+               :as state} c-state
+              last-state c-state
+              channels nil]
+      (let [;; Pre-loop setup
+            same-control     (= control
+                                (:control last-state))
+            same-controllers (= controllers
+                                (:controllers last-state))
+            channels (cond (not same-controllers) (into [control beacon]
+                                                        (map :channel)
+                                                        controllers)
+                           (not same-control) (assoc channels
+                                                     0 control
+                                                     1 beacon)
+                           :else channels)
+            ;; Waiting for operations
+            [port value] (alts! channels)
+
+            ;; TODO: Bind the appropriate globals!
+            
+            next-state (cond
+                         ;; Control channel
+                         (= port control)
+                         (do (assert (fn? value)
+                                     "Control channel requires function messages.")
+                             (value state))
+                         ;; Beacon
+                         (= port beacon)
+                         (do (if value
+                               (update state :c-map run-systems systems)
+                               (skip-handler state)))
+                         ;; Everything else
+                         :else
+                         (do (assert (fn? value)
+                                     "Controller channel requires function messages.")
+                             (value state)))]
+        (if next-state
+          (recur ft
+                 next-state
+                 state
+                 channels))))
+    
+    ;; Return the control channel
+    (:control c-state)))
+
+;; TODO: Change "control" to "command" to make things a little less confusing
+;; TODO: Implement a special instance of vector that has the control and beacon
+;; accessible???

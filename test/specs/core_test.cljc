@@ -1,3 +1,4 @@
+
 (ns specs.core-test
   (:require [#?(:clj clojure.core.async :cljs cljs.core.async)
              :as async
@@ -11,11 +12,17 @@
              :refer [<|]]
             [clojure.test :refer :all]
             [specs.core :refer :all]
+            [specs.control :as ctrl]
+            [specs.util :as su]
+
+            [clojure.core.matrix :as mx]
             
             [#?(:clj clj-time.core :cljs cljs-time.core)
              :as tm]
-            
-            ))
+
+            ;; 
+            (quil [core :as q]
+                  [middleware :as qm])))
 
 ;;;; A test-map that we can use for cross-referencing!
 (def alphabet (map char (range (int \a) (inc (int \z)))))
@@ -221,3 +228,141 @@
     (is (= (new-fast Position) (->Position 2 2)))
     (is (= (new-fast Velocity) (->Velocity 2 2)))
     (is (= (new-fast Acceleration) (->Acceleration 1 1)))))
+
+
+;;;; Update loop tests
+;;;; For now, this test is interactive rather than automated.
+
+;;;; The test here is a basic game about moving shapes around the screen
+
+(defcomponent Phys
+  "The physical attributes of this entity, like position, velocity, angle, etc."
+  [pos vel acc
+   rot rot-vel rot-acc
+   mat mat-vel mat-acc])
+
+(defn rp-mat
+  "Given a position and a rotation, make a homogeneous
+  matrix that combines both transformations."
+  [r [x y :as v]]
+  (let [c (mx/cos r)
+        s (mx/sin r)]
+    [[c (- s) x]
+     [s    c  y]
+     [0    0  1]]))
+
+(defsys phys-update
+  [e]
+  [{:keys [[pos vel acc
+            rot rot-vel rot-acc
+            mat mat-vel mat-acc
+            trans-mat]]
+    :as phys} Phys]
+
+  (let [pos (mx/add pos vel)
+        vel (mx/add vel acc)
+        mat (rp-mat rot pos)
+        mat-vel (rp-mat rot-vel vel)
+        mat-acc (rp-mat rot-acc acc)])
+  
+  (-> phys
+      (update :pos mx/add vel)
+      (update :vel mx/add acc)
+      (update :rot + rot-vel)
+      (update :rot-vel + rot-acc)))
+
+
+
+(defcomponent Shape
+  "A component that represents some basic 2D shape that can be drawn.
+Usually, the args represent vertices.  If the shape is a circle, there are no args."
+  [shape-type args edge-color fill-color])
+
+(defsys render-shape
+  [e]
+  [{:keys []} Shape
+   {:keys []} Phys]
+  )
+
+(defn setup []
+  (q/frame-rate 30)
+  (q/color-mode :hsb)
+  ;; The game state is a control state structure
+  (ctrl/control-state))
+
+(defn draw-state [state]
+  (q/background 240)
+  (q/color 0)
+  (q/ellipse 100 100 50 50)
+  state)
+
+
+(def current-sketch (atom nil))
+
+(defn start-sketch []
+  (->>
+   (q/sketch
+    :title "The Sketch"
+    :size [640 480]
+    :update identity
+    :draw draw-state
+    :features [:no-start]
+    :middleware [qm/fun-mode])
+   (reset! current-sketch)))
+
+
+(def vec-state (atom nil))
+
+(def init-vectors
+  [[1 1] [-1 1]])
+
+(defn v-setup
+  []
+  (let [ratio (/ (min (q/width) (q/height)) 2.0)]
+    (q/frame-rate 60)
+    (q/color-mode :rgb)
+    (q/smooth)
+    
+    (q/stroke-weight 0.01)
+    (->> {:ratio ratio
+          :center [(/ (q/width) ratio 2.0)
+                   (/ (q/height) ratio 2.0)]
+          :vecs (map (fn [v]
+                       (vary-meta v update :color
+                                  #(or % [(rand-int 255)
+                                          (rand-int 255)
+                                          (rand-int 255)])))
+                     init-vectors)}
+         (reset! vec-state))))
+
+(def printed-matrix
+  (atom "NO_MAT"))
+
+(defn v-draw
+  [{[w h] :center
+    :keys [ratio ] :as state}]
+  (q/background 0)
+  (q/push-matrix)
+  
+  (q/scale ratio, (- ratio))
+  (q/translate w (-  h))
+  
+  (q/stroke 255)
+  (q/line [0 0] [1 1])
+  (q/rect 0 0 1 1)
+  
+  (reset! printed-matrix
+          (with-out-str
+            (q/print-matrix)))
+  (q/pop-matrix)
+  )
+
+(defn vector-sketch
+  []
+  (q/sketch
+   :title "Vectors"
+   :size [640 480]
+   :update identity
+   :draw #'v-draw
+   :setup #'v-setup
+   :middleware [qm/fun-mode]))
