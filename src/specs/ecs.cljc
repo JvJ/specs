@@ -1,0 +1,172 @@
+(ns specs.ecs
+  "This namespace contains the data-types associated with components."
+  (:require
+
+   [cross-map.util :refer [new-uuid kvp]]
+   
+   #?(:clj [clojure.tools.macro :as cmt
+            :refer [name-with-attributes]])))
+
+;; Component data types
+(defprotocol IComponent
+  "Extend this protocol to implement any component type.
+  It's easier to use the defcomponent macro to generate
+  component types."
+  (getCType [this] "Get the component-type of this object."))
+
+(defn ctype
+  "Get the type of the object passed-in.
+  First tries to return the :type metadata.  Then, if
+  the object satisfies IComponent, .getType is called.
+  Finally, the object's type is returned if all else fails."
+  [o]
+  (or (some-> o meta :type)
+      (and (satisfies? IComponent o) (.getCType o))
+      (type o)))
+
+;; Helper functions for defcomponent
+(defn- impl-class-sym
+  "Convert a symbol defining a component type to the
+  name of its implementation class.  This is done
+  by adding 2 underscores before the symbol name.
+  Namespace is kept the same."
+  [s]
+  (symbol (namespace s) (str "__" (name s))))
+
+(defn- ctype-keyword
+  "Convert a ctype symbol to a namespace-qualified
+  keyword.  If no NS is provided for the symbol,
+  the current namespace is used."
+  [s]
+  (keyword (or (namespace s)
+               (name (.-name *ns*)))
+           (name s)))
+
+(defn- ctype-sym
+  "Convert ctype namespace-qualified keyword
+  to a symbol.  NS must be provided!"
+  [s]
+  {:pre [(namespace s)]}
+  (symbol (namespace s)
+          (name s)))
+
+(defn- factory-fn-sym
+  "Create a factory function symbol for defcomponent."
+  [s]
+  (symbol (namespace s) (str "->" (name s))))
+
+(defmacro defcomponent
+  "Define a component type.  Use is similar to defrecord, but an optional
+  docstring and/or attr-map may be provided.
+
+  Instead of just a name, a list of the format (name :< & ctypes) may be
+  provided.  If this is the case, the new component inherits from another
+  component type.  It also implicitly inherits all that type's fields.
+
+  Specifying a field of the same name as that of a supertype will cause
+  an exception."
+  {:arglists '([name docstring? attr-map? [& fields] & opts+specs])}
+  [nme & args]
+  (let [[nme ctypes] (if (seq? nme)
+                       (do (assert (and (>= (count nme) 3) (= :< (second nme)))
+                                   "When inheriting component types, the format is (name :< & ctypes).")
+                           [(first nme) (drop 2 nme)])
+                       [nme ()])
+        [nme [fields & args]] (name-with-attributes nme args)
+        _ (assert (vector? fields) "defcomponent requires vector of fields.")
+        nme-kw (ctype-keyword nme)
+        impl-class (impl-class-sym nme)
+        fac-fn (factory-fn-sym nme)]
+    
+    `(do (defrecord ~impl-class
+             ~fields
+           IComponent
+           (~'getCType [~'this] ~nme-kw)
+           ~@args)
+         (derive ~nme-kw Component)
+         (def ^{:fields ~fields :keyword ~nme-kw} ~nme ~nme-kw)
+         (defn ~fac-fn ~fields
+           (new ~impl-class ~@fields)))))
+
+;;; ECS data types
+(defn e-map
+  "Create an entity map."
+  [id & {:as m}]
+  (vary-meta m assoc :type ::e-map :eid id))
+
+(defn e-map?
+  [m]
+  (isa? (ctype m) ::e-map))
+
+(defn get-eid
+  "Retrieves the eid from the metadata of an e-map."
+  [m]
+  (-> m meta :eid))
+
+(defn ->e-map
+  "Convert a structure to an entity map."
+  [id m]
+  (if (and (e-map? m) (= (get-eid m) id))
+    m
+    (vary-meta m assoc :type ::e-map :eid id)))
+
+(defn c-map
+  "Create a component map."
+  [ctp & {:as m}]
+  (vary-meta m assoc :type ::c-map :ctype ctp))
+
+(defn c-map?
+  [m]
+  (isa? (ctype m) ::c-map))
+
+(defn get-ctype
+  "Retrieves the ctype from the metadata of a c-map."
+  [m]
+  (-> m meta :ctype))
+
+(defn ->c-map
+  "Convert a structure to a component map."
+  [ctp m]
+  (if (and (c-map? m) (= (get-ctype m) ctp))
+    m
+    (vary-meta m assoc :type ::c-map :ctype ctp)))
+
+
+(defn ec-entry
+  [k v]
+  (with-meta
+    [k v]
+    {:type ::ec-entry}))
+
+(def ece ec-entry)
+
+(defn ec-entry?
+  [kv]
+  (= ::ec-entry (ctype kv)))
+
+(defn ec-seq
+  "Enter all the return values in here."
+  [& args]
+  (with-meta args
+    {:type ::ec-seq}))
+
+(defn ec-seq?
+  [s]
+  (= ::ec-seq (ctype s)))
+
+(defn entity-with-id
+  "Create a new entity with the specified ID."
+  [id & components]
+  (->e-map id
+           (into {} (map #(kvp (ctype %) %))
+                 components)))
+
+(defn entity
+  "Utility function for easy creation of a new entity."
+  [& components]
+  (apply entity-with-id (new-uuid) components))
+
+(def ^{:fields [] :keyword ::Component}
+  Component
+  "Supertype of all componnets."
+  ::Component)

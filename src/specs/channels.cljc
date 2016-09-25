@@ -11,7 +11,9 @@
              :as p]
             
             [#?(:clj clj-time.core :cljs cljs-time.core)
-             :as tm]))
+             :as tm]
+
+            [specs.profiles :refer :all]))
 
 
 (defn timeout-at
@@ -72,3 +74,43 @@
                (recur)))))
      ;; Return the channel
      c2)))
+
+(defprotocol IProfileChannel
+  "A channel with an associated cross-map selector."
+  (profile [this] "Get the unrealized cross-map profile for this channel.")
+  (profile-fn [this] "Get the fully realized cross-map profile for this channel."))
+
+(defrecord
+    ProfileChannel
+    [channel
+     prof
+     prof-fn]
+
+  IProfileChannel
+  (profile [this] prof)
+  (profile-fn [this] prof-fn)
+  
+  p/ReadPort
+  (take! [this handler]
+    (p/take! channel handler))
+
+  p/WritePort
+  (put! [this msg handler]
+    (p/put! channel msg handler))
+
+  p/Channel
+  (close! [this]
+    (p/close! channel)))
+
+
+(defn profile-chan
+  "Create a profile-channel with a realized profile.
+  Optional additional args are passed to core.async/chan."
+  [prof-fn & args]
+  (->ProfileChannel (apply chan args) prof-fn))
+
+(defn pchan
+  "Construct a profile channel with an unrealized profile.
+  Optional additional args are passwd to core.async/chan."
+  [prof & args]
+  (apply profile-chan (realize-profile prof) args))

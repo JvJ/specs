@@ -107,7 +107,7 @@
 
    Controllers are Communicating Sequential Processes that control and
    react to the game state.  While system functions are executed
-   synchronously durung game update cycles, controllers run completely
+   synchronously during game update cycles, controllers run completely
    independent of that cycle.
 
    Controllers may observe and effect changes in the game state by

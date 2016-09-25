@@ -1,9 +1,13 @@
 (ns specs.game-test
   (:require  #?(:clj [clojure.test :as t]
                 :cljs [cljs.test :as t :include-macros true])
-             #?(:clj [clojure.core.async :as async]
-                :cljs [cljs.core.async :as async :include-macros true])
+             [#?(:clj clojure.core.async :cljs cljs.core.async)
+              :as async
+              :include-macros true
+              :refer [chan go <! >! put! take! go-loop
+                      timeout alts! alt! close!]]
              [specs.core :refer :all]
+             [specs.ecs :refer :all]
              [specs.control :as ctrl]
              [clojure.core.matrix :as mx]
              (quil [core :as q]
@@ -105,9 +109,47 @@ Usually, the args represent vertices.  If the shape is a circle, there is one ar
 
     (reset! last-frame-millis t))
 
-  state)
+  (reset! current-state state))
 
 (def current-sketch (atom nil))
+
+(defsys turn-red
+  "Turn an entity red."
+  [e]
+  [shp Shape]
+  (assoc shp :fill-color [255 0 0]))
+
+(defsys turn-white
+  "Turn an entity white."
+  [e]
+  [shp Shape]
+  (assoc shp :fill-color [255 255 255]))
+
+
+(defn white-red-loop
+  []
+  (let [c (chan)]
+    (ctrl/controller
+     c
+     (go-loop []
+       (>! c turn-red)
+       (<! (timeout 1000))
+       (>! c turn-white)
+       (<! (timeout 1000))
+       (recur)))))
+
+(defn red-white-blinks
+  [n]
+  (let [c (chan)]
+    (ctrl/controller
+     c
+     (go-loop [i 0]
+       (when (< i n)
+         (>! c turn-red)
+         (<! (timeout 200))
+         (>! c turn-white)
+         (<! (timeout 1000))
+         (recur (inc i)))))))
 
 (defn start-sketch []
   (->>
