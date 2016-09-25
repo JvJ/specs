@@ -1,4 +1,3 @@
-
 (ns specs.core-test
   (:require [#?(:clj clojure.core.async :cljs cljs.core.async)
              :as async
@@ -19,7 +18,7 @@
             
             [#?(:clj clj-time.core :cljs cljs-time.core)
              :as tm]
-
+            
             ;; 
             (quil [core :as q]
                   [middleware :as qm])))
@@ -253,51 +252,141 @@
 
 (defsys phys-update
   [e]
-  [{:keys [[pos vel acc
-            rot rot-vel rot-acc
-            mat mat-vel mat-acc
-            trans-mat]]
+  [{:keys [pos vel acc
+           rot rot-vel rot-acc
+           mat mat-vel mat-acc
+           trans-mat]
     :as phys} Phys]
 
   (let [pos (mx/add pos vel)
         vel (mx/add vel acc)
+        rot (+ rot rot-vel)
+        rot-vel (+ rot-vel rot-acc)
         mat (rp-mat rot pos)
         mat-vel (rp-mat rot-vel vel)
-        mat-acc (rp-mat rot-acc acc)])
-  
-  (-> phys
-      (update :pos mx/add vel)
-      (update :vel mx/add acc)
-      (update :rot + rot-vel)
-      (update :rot-vel + rot-acc)))
+        mat-acc (rp-mat rot-acc acc)]
+    
+    (-> phys
+        (assoc :pos pos :vel vel
+               :rot rot :rot-vel rot-vel
+               :mat mat :mat-vel mat-vel :mat-acc mat-acc))))
 
 
 
 (defcomponent Shape
   "A component that represents some basic 2D shape that can be drawn.
-Usually, the args represent vertices.  If the shape is a circle, there are no args."
+Usually, the args represent vertices.  If the shape is a circle, there is one arg - the radius."
   [shape-type args edge-color fill-color])
 
+(defonce
+  render-fns-chan
+  (chan (async/sliding-buffer 10)))
+
+(defonce
+  render-fns-count
+  (atom 0))
+
+;; LEFTOFF: Why is this not executing??
 (defsys render-shape
   [e]
-  [{:keys []} Shape
-   {:keys []} Phys]
-  )
+  [{:keys [shape-type
+           args
+           edge-color
+           fill-color] :as shp} Shape
+   {[x y :as pos] :pos
+    :keys [rot] :as phs} Phys]
+  ;; We can't directly render in this function, so
+  ;; we push a renderfunction to the queue
+;;  (println "System's gettin' called, doggo!")
+  (put! render-fns-chan
+        (fn render-inner []
+          #_(println "Inner function is getting called!!")
+          (q/fill 255 0 0)
+          (q/text (str "Here are the things: " rot ", " args)  0 60)
+          (case shape-type 
+            :polygon nil
+            :circle (let [[rad] args
+                          _ (assert (number? rad) "Circle expects single number param.")
+                          [[_ lx _] [_ ly _ ] _ :as lmx] (mx/mul (rp-mat rot [0 0]) [0 rad 1])]
+                      (q/ellipse-mode :center)
+                      (apply q/fill fill-color)
+                      (apply q/stroke edge-color)
+                      ;; TODO: is it rigt to use the rad directly like this?
+                      
+                      (q/ellipse x y rad rad)
+                      ;;(q/text (str "lmx: " lmx) 0 80)
+                      (q/line x y lx ly)
+                      nil)
+            ;; Default
+            nil)))
+  (swap! render-fns-count inc)
+  e)
 
-(defn setup []
-  (q/frame-rate 30)
-  (q/color-mode :hsb)
+(defn setup
+  "Setup for the main sketch."
+  []
+  (q/frame-rate 50)
+  (q/color-mode :rgb)
   ;; The game state is a control state structure
-  (ctrl/control-state))
+  (let [ret (ctrl/control-state
+             :systems [phys-update
+                       render-shape]
+             :c-map (game-state (list (entity (->Shape :circle [50] [0 0 0]
+                                                       [255 255 255])
+                                              (->Phys [100 100 1]
+                                                      [0 0 1]
+                                                      [0 0 1]
+                                                      0
+                                                      0
+                                                      0
+                                                      [[1 0 0]
+                                                       [0 1 0]
+                                                       [0 0 1]]
+                                                      [[1 0 0]
+                                                       [0 1 0]
+                                                       [0 0 1]]
+                                                      [[1 0 0]
+                                                       [0 1 0]
+                                                       [0 0 1]]))))
+             :beacon 20)]
+    (update-loop ret)
+    ret))
 
-(defn draw-state [state]
-  (q/background 240)
-  (q/color 0)
-  (q/ellipse 100 100 50 50)
+(def framecounter (atom 0))
+
+(defn draw-state [{:keys [beacon
+                          beacon-notify]
+                   :as state}]
+  (q/background 0)
+
+  (q/fill 255)
+
+  (q/ellipse 200 200 50 50)
+
+  (q/fill 0 255 0)
+  (q/text (str "Frame-counter: " (swap! framecounter inc)) 0 20)
+  (q/text (str "Fn-counter: " @render-fns-count) 0 40)
+
+  (when-let [f (async/poll! render-fns-chan)]
+    (swap! render-fns-count dec)
+    (f)
+    )
+  
+  #_(try (do
+         (q/text "Putting beacon..."0 40)
+         (put! beacon true)
+         (let [ns (<!! beacon-notify)]
+           (q/fill 255)
+           (q/text (str "State: " ns) 0 60)))
+       (catch Exception e
+         (q/fill 255 0 0)
+         (q/text (str "Error: " e 0 60))))
+  
   state)
 
 
-(def current-sketch (atom nil))
+(def current-sketch
+  (atom nil))
 
 (defn start-sketch []
   (->>
@@ -305,7 +394,8 @@ Usually, the args represent vertices.  If the shape is a circle, there are no ar
     :title "The Sketch"
     :size [640 480]
     :update identity
-    :draw draw-state
+    :setup #'setup
+    :draw #'draw-state
     :features [:no-start]
     :middleware [qm/fun-mode])
    (reset! current-sketch)))
@@ -343,7 +433,8 @@ Usually, the args represent vertices.  If the shape is a circle, there are no ar
     :keys [ratio ] :as state}]
   (q/background 0)
   (q/push-matrix)
-  
+
+  ;; Scale 
   (q/scale ratio, (- ratio))
   (q/translate w (-  h))
   

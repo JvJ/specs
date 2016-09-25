@@ -1,3 +1,4 @@
+
 (ns specs.util
   "Utility functions for specs.")
 
@@ -22,3 +23,12 @@
     `(let ~(apply vector b v bindings)
        ~@args)))
 
+(defn queue
+  "Create a persistent queue."
+  [& args]
+  #?(:clj  (into clojure.lang.PersistentQueue/EMPTY args)
+     :cljs (into #queue[] args)))
+
+(defn queue? [q]
+  #?(:clj  (instance? clojure.lang.PersistentQueue q)
+     :cljs (instance? cljs.core.PersistentQueue q)))

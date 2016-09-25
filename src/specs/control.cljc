@@ -31,25 +31,51 @@ the control channels, system order, and controllers."}
     ControlState
     [c-map
      control
+     control-notify
      beacon
+     beacon-notify
      systems
      controllers])
 
 (defn control-state
   "Create a control state.
   The controllers field of the resulting state will be a
-  vector with control as its first element."
-  [& {:keys [c-map control frame-time systems controllers]
+  vector with control as its first element.
+  
+  The parameter :beacon may be a number or a channel.
+  If it is a number, it creates a beacon channel with a period of that
+  many milliseconds."
+  [& {:keys [c-map control beacon systems controllers]
       :or {c-map (cross-map)
            control (chan)
-           frame-time 20
+           beacon 20
            systems []
            controllers #{}}}]
   (->ControlState c-map
                   control
-                  (beacon frame-time)
+                  (chan (async/dropping-buffer 1024))
+                  (if (number? beacon)
+                    (specs.channels/beacon beacon)
+                    beacon)
+                  (chan (async/dropping-buffer 1024))
                   systems
                   controllers))
+
+(defn close-control-state!
+  "Close all the channels in the control state."
+  [{:keys [c-map
+           control
+           control-notify
+           beacon
+           beacon-notify
+           systems
+           controllers]
+    :as c-state}]
+  (async/close! control)
+  (async/close! control-notify)
+  (async/close! beacon)
+  (async/close! beacon-notify)
+  c-state)
 
 ;;;; Control messages are functions that execute on control states
 ;;;; Here are a few utility-functions

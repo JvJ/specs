@@ -14,7 +14,7 @@
             [specs.channels :as s-ch
              :refer [beacon]]
             [specs.control :as s-ctrl
-             :refer [controller control-state]]
+             :refer [controller control-state close-control-state!]]
 
             [#?(:clj clj-time.core :cljs cljs-time.core)
              :as tm]
@@ -225,9 +225,9 @@
            (into {} (map #(kvp (ctype %) %))
                  components)))
 
-(defn new-entity
+(defn entity
   "Utility function for easy creation of a new entity."
-  [& {:as components}]
+  [& components]
   (apply entity-with-id (new-uuid) components))
 
 ;;;; Cross-map iteration profiles
@@ -438,7 +438,7 @@
                  p-or-b)
         nme (with-meta nme (assoc (meta nme)
                                   :arglists `'(~params ~p-or-b)))]
-    `(def ~nme (sysfn ~params ~p-or-b ~@args))))
+    `(def ~nme (sysfn ~nme ~params ~p-or-b ~@args))))
 
 
 (defn profile
@@ -500,70 +500,82 @@
           systems))
 
 (defn update-loop
-  "Async process that updates the system functions based on a
-  frame-time, specified in milliseconds.
+  "Async process that updates the system functions.
 
   It requires an initial game state, and returns a control state.
 
   Passing functions of c-state to c-state over the command channel
-  causes the command channel to be updated.  If a function returns
+  causes the c-state to be updated.  If a function returns
   a nil value for a c-state, the loop will exit.
 
   A skip handler may be provided, which is a function from c-state
   to c-state."
-  [frame-time game-state skip-handler]
-  (let [c-state (control-state :c-map game-state
-                               :frame-time frame-time)]
-    (go-loop [ft frame-time
-              {:keys [c-map
-                      control
-                      beacon
-                      systems
-                      controllers]
-               :as state} c-state
-              last-state c-state
-              channels nil]
-      (let [;; Pre-loop setup
-            same-control     (= control
-                                (:control last-state))
-            same-controllers (= controllers
-                                (:controllers last-state))
-            channels (cond (not same-controllers) (into [control beacon]
-                                                        (map :channel)
-                                                        controllers)
-                           (not same-control) (assoc channels
-                                                     0 control
-                                                     1 beacon)
-                           :else channels)
-            ;; Waiting for operations
-            [port value] (alts! channels)
+  ([control-state]
+   (update-loop control-state identity))
+  ([control-state skip-handler]
+   (let [c-state control-state]
+     (go-loop [{:keys [c-map
+                       control
+                       control-notify
+                       beacon
+                       beacon-notify
+                       systems
+                       controllers]
+                :as state} c-state
+               last-state c-state
+               channels [control beacon]]
+       (let [;; Pre-loop setup
+             same-control     (= control
+                                 (:control last-state))
+             same-controllers (= controllers
+                                 (:controllers last-state))
+             channels (cond (not same-controllers) (into [control beacon]
+                                                         (map :channel)
+                                                         controllers)
+                            (not same-control) (assoc channels
+                                                      0 control
+                                                      1 beacon)
+                            :else channels)
+             ;; Waiting for operations
+             [value port] (try (alts! channels)
+                               (catch Exception e
+                                 (assert false (str "Alt error, channels: " channels ", msg: " e))))
 
-            ;; TODO: Bind the appropriate globals!
-            
-            next-state (cond
-                         ;; Control channel
-                         (= port control)
-                         (do (assert (fn? value)
-                                     "Control channel requires function messages.")
-                             (value state))
-                         ;; Beacon
-                         (= port beacon)
-                         (do (if value
-                               (update state :c-map run-systems systems)
-                               (skip-handler state)))
-                         ;; Everything else
-                         :else
-                         (do (assert (fn? value)
-                                     "Controller channel requires function messages.")
-                             (value state)))]
-        (if next-state
-          (recur ft
-                 next-state
-                 state
-                 channels))))
-    
-    ;; Return the control channel
-    (:control c-state)))
+             ;; TODO: Bind the appropriate globals!
+             
+             next-state (cond
+                          ;; Control channel
+                          (= port control)
+                          (do (assert (fn? value)
+                                      (str "Control channel requires function messages.  Received: " value))
+                              (value state))
+                          
+                          ;; Beacon
+                          (= port beacon)
+                          (do (if value
+                                (update state :c-map run-systems systems)
+                                (skip-handler state)))
+                          ;; Everything else
+                          ;; TODO: How to notify completion?
+                          :else
+                          (do (assert (fn? value)
+                                      (str "Controller channel requires function messages.  Channels: " channels "Value:" (or value "nil") ", Port: " (or port "nil")))
+                              (value state)))
+
+             ;; Push messages onto the notification channels if necessary
+             ;; TODO: What kind of notification channel is used for controller messages?
+             _ (if next-state
+                 (cond (= port control) (put! control-notify next-state)
+                       (= port beacon) (put! beacon-notify next-state)))]
+         (if next-state
+           (recur next-state
+                  state
+                  channels)
+           ;; Else
+           (do (close-control-state! next-state)))))
+     
+     ;; Return the control channel
+     (:control c-state))))
 
 ;; TODO: Change "control" to "command" to make things a little less confusing
 ;; TODO: Implement a special instance of vector that has the control and beacon
