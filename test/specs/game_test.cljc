@@ -8,8 +8,10 @@
                       timeout alts! alt! close!]]
              [specs.core :refer :all]
              [specs.ecs :refer :all]
-             [specs.control :as ctrl]
+             [specs.control :as ctrl
+              :refer [defcontroller *ctrl*]]
              [clojure.core.matrix :as mx]
+             [specs.quil-util :as qu]
              (quil [core :as q]
                    [middleware :as qm])))
 
@@ -43,9 +45,9 @@
 Usually, the args represent vertices.  If the shape is a circle, there is one arg - the radius."
   [shape-type args edge-color fill-color])
 
-(def render-fn
+(def render-fns
   "This will contain a no-args function that draws each screen."
-  (atom (fn [])))
+  (atom []))
 
 (defn rotate-vec
   "Rotate a 2d vector by the angle"
@@ -59,11 +61,12 @@ Usually, the args represent vertices.  If the shape is a circle, there is one ar
   [e]
   [shp Shape
    phs Phys]
-  (reset!
-   render-fn
+  (swap!
+   render-fns
+   conj
    ;; A lambda for rendering
    (fn render-inner []
-     (q/background 100)
+     ;;(q/background 100)
      (case (:shape-type shp)
        :circle (let [[rad] (:args shp)
                      [x y] (:pos phs)
@@ -84,6 +87,9 @@ Usually, the args represent vertices.  If the shape is a circle, there is one ar
 (def current-state
   (atom nil))
 
+(defn current-control []
+  (:control @current-state))
+
 (defn setup
   "Setup the main sketch."
   []
@@ -91,9 +97,11 @@ Usually, the args represent vertices.  If the shape is a circle, there is one ar
   (q/color-mode :rgb)
   ;; The game state is a control state structure
   (let [ret (ctrl/control-state
-             :systems [phys-update
+             :systems [qu/clear-render
+                       phys-update
                        render-shape]
-             :c-map (game-state [(entity (->Shape :circle [50] [0 0 0] [255 255 255])
+             :c-map (game-state [(entity (qu/->RenderContext [0 0 100] render-fns))
+                                 (entity (->Shape :circle [50] [0 0 0] [255 255 255])
                                          (->Phys [100 100]
                                                  [5 0] 0
                                                  Math/PI))])
@@ -104,8 +112,9 @@ Usually, the args represent vertices.  If the shape is a circle, there is one ar
 
 (defn draw-state [state]
   (let [t (q/millis)]
-    (when-let [f @render-fn]
-      (f))
+    (when-let [fs @render-fns]
+      (doseq [f fs]
+        (f)))
 
     (reset! last-frame-millis t))
 
@@ -150,6 +159,16 @@ Usually, the args represent vertices.  If the shape is a circle, there is one ar
          (>! c turn-white)
          (<! (timeout 1000))
          (recur (inc i)))))))
+
+(defcontroller blinker
+  []
+  (loop [i 0]
+    (when (< i 10)
+      (>! *ctrl* turn-red)
+      (<! (timeout 200))
+      (>! *ctrl* turn-white)
+      (<! (timeout 1000))
+      (recur (inc i)))))
 
 (defn start-sketch []
   (->>

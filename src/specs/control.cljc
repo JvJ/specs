@@ -9,21 +9,23 @@
              :refer [cross-map cross-cols cross-rows cross
                      cols rows]]
    [specs.channels :as s-ch
-             :refer [beacon]]))
+    :refer [beacon]]
+   #?(:clj [clojure.tools.macro :as cmt
+                     :refer [name-with-attributes]])))
 
 (defrecord
     ^{:doc "A process and i/o channel for sending system functions to the
 main update loop."}
     Controller
-    [channel
+    [control-channel
      process])
 
 (defn controller
   "Create a controller with a channel.
   If a channel is not provided, it defaults to (chan)."
-  ([process] (controller (chan) process))
-  ([channel process]
-   (->Controller channel process)))
+  ([process] (controller (chan) (chan) process))
+  ([ctrl process]
+   (->Controller ctrl process)))
 
 (defrecord
     ^{:doc "This structure represents the full game-state cross-map along with
@@ -84,4 +86,31 @@ the control channels, system order, and controllers."}
   (fn [c-state]
     (update c-state :controllers conj ctrlr)))
 
+(def ^:dynamic *ctrl*
+  "The control channel associated with the current controller process."
+  nil)
 
+(def ^:dynamic *res*
+  "The results channels associated with the current controller process.
+  This represents a map of channels, indexed by keywords."
+  nil)
+
+(defmacro defcontroller
+  "Defines a function that produces a controller.
+  Inside the function, specs.control/*ctrl* is bound
+  to the controller's control channel.
+
+  The body is defined in an implicit go block."
+  {:arglists '([name doc-string? attr-map? [channels*] body])}
+  [nme & args]
+  (let [[nme [chans & body]] (name-with-attributes nme args)
+        _ (assert (and (vector? chans) (even? (count chans)))
+                  (str "Expected channel bindings.  Received: " chans))]
+    `(defn ~nme
+       ([] (~nme (chan)))
+       ([ctrl#]
+        (binding [*ctrl* ctrl#]
+          (let ~chans
+            (controller
+             ctrl#
+             (go ~@body))))))))

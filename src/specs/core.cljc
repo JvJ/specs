@@ -98,7 +98,7 @@
       ::ec-seq   o
       ::state-op o
       
-      ;; Default case treats it as component, with type as a key
+      ;; Default casecontr treats it as component, with type as a key
       (do (assert *eid* "Cannot coerce from single component in this context.")
           (ec-seq (ece [*eid* t] o))))))
 
@@ -259,7 +259,7 @@
              same-controllers (= controllers
                                  (:controllers last-state))
              channels (cond (not same-controllers) (into [control beacon]
-                                                         (map :channel)
+                                                         (map :control-channel)
                                                          controllers)
                             (not same-control) (assoc channels
                                                       0 control
@@ -273,6 +273,11 @@
              ;; TODO: Bind the appropriate globals!
              
              next-state (cond
+                          ;; Sysfns get applied to the state
+                          (sysfn? value)
+                          (do (println "Sysfn updating...")
+                              (update state :c-map run-systems [value]))
+                          
                           ;; Control channel
                           (= port control)
                           (do (assert (fn? value)
@@ -285,9 +290,7 @@
                                 (update state :c-map run-systems systems)
                                 (skip-handler state)))
 
-                          ;; Sysfns get applied to the state
-                          (sysfn? value)
-                          (update state :c-map run-systems [value])
+
                           
                           ;; Everything else
                           :else
