@@ -2,6 +2,8 @@
 
 Specs is an experimental clojure game scripting framewok.  Specs stands for "Sequential Processes and Entity Component System".  It combines the communicating sequential processes (CSP) of clojure's core.async library with the entity-component-system (ECS) design pattern.
 
+See docs/design.org for more detailed information.
+
 ## Overview and Examples
 
 ### ECS
