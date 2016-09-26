@@ -64,7 +64,7 @@ The other half of Specs is the asynchronous processes.
 
 In the above core, we define set-vel, a function that returns a function.  Given an entity id eid, and a dx and a dy, it returns a system function, just like update-pos that we had before.  The difference is that, instead of selecting entities based on their components, this system function uses match-eid to select entities based on their ID.  Since ID's are unique, this will be only one entity.
 
-System functions, in addition to being used for updates, can also be used as messages.  The controller back-and-forth is a simple asychronous loop.  It sends a set-velocity message to the entity with id "dat boi", waits 1000 milliseconds, sets the velocity to the opposite direction, and waits another 1000 milliseconds.
+System functions, in addition to being used for updates, can also be used as messages.  The controller back-and-forth is a simple asychronous loop.  It sends a set-velocity message to the entity with id "dat boi", waits 1000 milliseconds, sets the velocity to the opposite direction, and waits another 1000 milliseconds.  This means that dat boi will move back and forth indefinitely, travelling for 1 second in each direction.
 
 The end result is that the behaviour of the behaviour of the entity can be manipulated from asynchronous processes independent of the update cycle.  It's easy to see how more complex behaviours can be scripted, which, although they operate asynchronously, can be written just like linear code.
 
