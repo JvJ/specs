@@ -54,9 +54,9 @@ The other half of Specs is the asynchronous processes.
    back-and-forth
    []
    (go-loop []
-      (>! *ctrl* (set-velocity "dat boi" 10 0)
+      (>! *ctrl* (set-velocity "dat boi" 10 0))
       (<! (timeout 1000))
-      (>! *ctrl* (set-velocity "dat boi" -10 0)
+      (>! *ctrl* (set-velocity "dat boi" -10 0))
       (<! (timeout 1000))
       (recur)))
 
